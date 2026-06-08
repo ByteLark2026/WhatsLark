@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: whatslark-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    plan: starter
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_PORT
+        value: 3001
+      - key: SUPABASE_URL
+        fromDatabase: false
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: WHATSAPP_API_VERSION
+        value: v19.0
+      - key: WHATSAPP_WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: RATE_LIMIT_TTL
+        value: 60
+      - key: RATE_LIMIT_MAX
+        value: 100
