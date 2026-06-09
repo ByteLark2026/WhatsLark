@@ -30,13 +30,16 @@ const statusVariant: Record<TemplateStatus, any> = {
   rejected: 'destructive',
 };
 
+const BLANK_FORM = { name: '', language: 'en', category: 'MARKETING', body: '' };
+
 export default function TemplatesPage() {
   const { toast } = useToast();
   const { company } = useAuthStore();
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: '', language: 'en', category: 'MARKETING', body: '' });
+  const [editTarget, setEditTarget] = useState<MessageTemplate | null>(null);
+  const [form, setForm] = useState(BLANK_FORM);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -52,6 +55,14 @@ export default function TemplatesPage() {
       setLoading(false);
     })();
   }, [company?.id]);
+
+  const openEdit = (tpl: MessageTemplate) => {
+    const body = tpl.components.find((c) => c.type === 'BODY')?.text || '';
+    setForm({ name: tpl.name, language: tpl.language, category: tpl.category, body });
+    setEditTarget(tpl);
+  };
+
+  const closeEdit = () => { setEditTarget(null); setForm(BLANK_FORM); };
 
   const handleAdd = async () => {
     if (!company?.id) return;
@@ -74,10 +85,74 @@ export default function TemplatesPage() {
     } else {
       setTemplates((prev) => [data as unknown as MessageTemplate, ...prev]);
       setShowAdd(false);
-      setForm({ name: '', language: 'en', category: 'MARKETING', body: '' });
+      setForm(BLANK_FORM);
       toast({ title: 'Template created — pending approval' });
     }
     setSaving(false);
+  };
+
+  const handleEdit = async () => {
+    if (!editTarget) return;
+    setSaving(true);
+    const supabase = createClient();
+    const updated = {
+      name: form.name,
+      language: form.language,
+      category: form.category,
+      components: editTarget.components.map((c) =>
+        c.type === 'BODY' ? { ...c, text: form.body } : c
+      ),
+      status: 'pending' as TemplateStatus,
+    };
+    const { data, error } = await supabase
+      .from('message_templates')
+      .update(updated)
+      .eq('id', editTarget.id)
+      .select()
+      .single();
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      setTemplates((prev) => prev.map((t) => t.id === editTarget.id ? data as unknown as MessageTemplate : t));
+      closeEdit();
+      toast({ title: 'Template updated — pending re-approval' });
+    }
+    setSaving(false);
+  };
+
+  const handleDuplicate = async (tpl: MessageTemplate) => {
+    if (!company?.id) return;
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('message_templates')
+      .insert({
+        company_id: company.id,
+        name: tpl.name + '_copy',
+        language: tpl.language,
+        category: tpl.category,
+        components: tpl.components,
+        status: 'pending',
+      })
+      .select()
+      .single();
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      setTemplates((prev) => [data as unknown as MessageTemplate, ...prev]);
+      toast({ title: 'Template duplicated' });
+    }
+  };
+
+  const handleDelete = async (tpl: MessageTemplate) => {
+    if (!confirm(`Delete template "${tpl.name}"? This cannot be undone.`)) return;
+    const supabase = createClient();
+    const { error } = await supabase.from('message_templates').delete().eq('id', tpl.id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      setTemplates((prev) => prev.filter((t) => t.id !== tpl.id));
+      toast({ title: 'Template deleted' });
+    }
   };
 
   return (
@@ -121,9 +196,9 @@ export default function TemplatesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Edit</DropdownMenuItem>
-                          <DropdownMenuItem>Duplicate</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEdit(tpl)}>Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDuplicate(tpl)}>Duplicate</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(tpl)}>Delete</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -139,6 +214,58 @@ export default function TemplatesPage() {
           </div>
         )}
       </div>
+
+      {/* Edit dialog */}
+      <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) closeEdit(); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit template</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Template name *</Label>
+              <Input placeholder="order_confirmation" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value.toLowerCase().replace(/\s/g, '_') })} />
+              <p className="text-xs text-muted-foreground">Lowercase, underscores only</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Language</Label>
+                <Select value={form.language} onValueChange={(v) => setForm({ ...form, language: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {['en', 'ms', 'id', 'th', 'ar', 'es', 'pt', 'fr', 'de', 'zh'].map((l) => (
+                      <SelectItem key={l} value={l}>{l.toUpperCase()}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {['MARKETING', 'UTILITY', 'AUTHENTICATION'].map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Body text *</Label>
+              <Textarea
+                rows={4}
+                placeholder="Hello {{1}}, your order {{2}} has been confirmed!"
+                value={form.body}
+                onChange={(e) => setForm({ ...form, body: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">Use &#123;&#123;1&#125;&#125;, &#123;&#123;2&#125;&#125; for variables</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEdit}>Cancel</Button>
+            <Button onClick={handleEdit} disabled={saving || !form.name || !form.body}>Save changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent>

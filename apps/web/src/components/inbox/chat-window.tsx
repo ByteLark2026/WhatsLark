@@ -60,26 +60,36 @@ export function ChatWindow({ conversation, onStatusChange }: Props) {
   const sendMessage = async () => {
     if (!text.trim() || !user?.id || !company?.id) return;
     setSending(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        conversation_id: conversation.id,
-        company_id: company.id,
-        direction: MessageDirection.OUTBOUND,
-        type: MessageType.TEXT,
-        content: text.trim(),
-        status: MessageStatus.SENT,
-        sender_id: user.id,
-        is_note: isNote,
-      })
-      .select()
-      .single();
-    if (error) {
-      toast({ title: 'Failed to send', description: error.message, variant: 'destructive' });
-    } else {
-      setMessages((prev) => [...prev, data as unknown as Message]);
-      setText('');
+    try {
+      const res = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: conversation.id,
+          company_id: company.id,
+          sender_id: user.id,
+          message: text.trim(),
+          is_note: isNote,
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok && res.status !== 207) {
+        toast({ title: 'Failed to send', description: json.error, variant: 'destructive' });
+      } else {
+        if (json.warning) {
+          // Message saved but delivery failed (e.g. no channel connected yet)
+          toast({
+            title: 'Saved but not delivered',
+            description: json.warning,
+            variant: 'destructive',
+          });
+        }
+        setMessages((prev) => [...prev, json.message as Message]);
+        setText('');
+      }
+    } catch (err: any) {
+      toast({ title: 'Failed to send', description: err.message, variant: 'destructive' });
     }
     setSending(false);
   };
