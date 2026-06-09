@@ -3,8 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const PROTECTED_PREFIXES = [
   '/dashboard', '/inbox', '/contacts', '/leads', '/campaigns',
-  '/templates', '/automations', '/ai-bot', '/channels', '/team',
-  '/settings', '/admin',
+  '/templates', '/automations', '/analytics', '/widget-builder',
+  '/ai-bot', '/channels', '/team', '/settings', '/admin',
 ]
 
 export async function middleware(request: NextRequest) {
@@ -61,6 +61,8 @@ export const config = {
     '/campaigns/:path*',
     '/templates/:path*',
     '/automations/:path*',
+    '/analytics/:path*',
+    '/widget-builder/:path*',
     '/ai-bot/:path*',
     '/channels/:path*',
     '/team/:path*',

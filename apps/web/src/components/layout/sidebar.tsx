@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, MessageSquare, Users, TrendingUp, Megaphone,
   FileText, Zap, Bot, Phone, UserCog, Settings, LogOut, ChevronDown,
-  Shield,
+  Shield, BarChart2, Code2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -23,6 +23,8 @@ const navItems = [
   { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
   { href: '/templates', label: 'Templates', icon: FileText },
   { href: '/automations', label: 'Automations', icon: Zap },
+  { href: '/analytics', label: 'Analytics', icon: BarChart2 },
+  { href: '/widget-builder', label: 'Widget Builder', icon: Code2 },
   { href: '/ai-bot', label: 'AI Bot', icon: Bot },
   { href: '/channels', label: 'Channels', icon: Phone },
   { href: '/team', label: 'Team', icon: UserCog },
