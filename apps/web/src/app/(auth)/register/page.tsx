@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store/auth';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase';
 import { UserRole } from '@whatslark/shared';
 
 export default function RegisterPage() {
@@ -18,25 +18,43 @@ export default function RegisterPage() {
   const { toast } = useToast();
   const { setAuth } = useAuthStore();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    full_name: '',
-    email: '',
-    password: '',
-    company_name: '',
-  });
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', company_name: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post<{
-        session: { access_token: string };
-        user: any;
-        company: any;
-      }>('/auth/register', form);
+      // Create account via Next.js API route (uses service role server-side)
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
 
-      setAuth(res.user, res.company, UserRole.OWNER, res.session.access_token);
-      localStorage.setItem('sb-token', JSON.stringify({ access_token: res.session.access_token }));
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Registration failed');
+
+      // Sign in with Supabase to get session cookies
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: form.email,
+        password: form.password,
+      });
+      if (error) throw new Error(error.message);
+
+      // Fetch user profile + company
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*, company_users(company_id, role, companies(*))')
+        .eq('id', data.user.id)
+        .single();
+
+      const companyUser = profile?.company_users?.[0];
+      if (companyUser) {
+        setAuth(profile, companyUser.companies, UserRole.OWNER, data.session!.access_token);
+        localStorage.setItem('sb-token', JSON.stringify({ access_token: data.session!.access_token }));
+      }
+
       toast({ title: 'Workspace created!', description: 'Welcome to WhatsLark.' });
       router.push('/dashboard');
     } catch (err: any) {

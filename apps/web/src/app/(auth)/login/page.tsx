@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store/auth';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,20 +23,34 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post<{
-        session: { access_token: string };
-        user: { id: string; email: string; full_name: string; is_super_admin: boolean; avatar_url?: string; created_at: string; updated_at: string; company_users: Array<{ role: any; company_id: string; companies: any }> };
-      }>('/auth/login', form);
+      const supabase = createClient();
 
-      const companyUser = res.user.company_users?.[0];
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: form.email,
+        password: form.password,
+      });
+
+      if (error) throw new Error(error.message);
+
+      // Fetch user profile + company
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('*, company_users(company_id, role, companies(*))')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError) throw new Error('Failed to load user profile');
+
+      const companyUser = profile?.company_users?.[0];
       if (companyUser) {
-        setAuth(res.user, companyUser.companies, companyUser.role, res.session.access_token);
-        // Store token for API client
-        localStorage.setItem('sb-token', JSON.stringify({ access_token: res.session.access_token }));
+        setAuth(profile, companyUser.companies, companyUser.role, data.session!.access_token);
+        localStorage.setItem('sb-token', JSON.stringify({ access_token: data.session!.access_token }));
       }
 
-      toast({ title: 'Welcome back!', description: `Logged in as ${res.user.full_name}` });
-      router.push('/dashboard');
+      toast({ title: 'Welcome back!', description: `Logged in as ${profile?.full_name}` });
+
+      const next = new URLSearchParams(window.location.search).get('next') || '/dashboard';
+      router.push(next);
     } catch (err: any) {
       toast({ title: 'Login failed', description: err.message, variant: 'destructive' });
     } finally {
