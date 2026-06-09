@@ -132,7 +132,7 @@ export default function SettingsPage() {
     toast({ title: `${label} copied` });
   };
 
-  const webhookUrl = `https://app.whatslark.com/api/webhooks/whatsapp`;
+  const webhookUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://whats-lark.vercel.app'}/api/webhooks/whatsapp`;
   const canConnect = form.name && form.phone_number && form.phone_number_id && form.business_account_id && form.access_token;
 
   return (
