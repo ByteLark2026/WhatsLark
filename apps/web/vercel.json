@@ -1,7 +1,5 @@
 {
-  "framework": "nextjs",
   "buildCommand": "cd ../.. && npm run build:web",
-  "outputDirectory": ".next",
   "installCommand": "cd ../.. && npm install",
   "env": {
     "NEXT_PUBLIC_APP_NAME": "WhatsLark"
