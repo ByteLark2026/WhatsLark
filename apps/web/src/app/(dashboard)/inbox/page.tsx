@@ -3,15 +3,16 @@
 import { useEffect, useState } from 'react';
 import { Search, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ConversationList } from '@/components/inbox/conversation-list';
 import { ChatWindow } from '@/components/inbox/chat-window';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
 import { ConversationStatus } from '@whatslark/shared';
 import type { Conversation } from '@whatslark/shared';
 
 export default function InboxPage() {
+  const { company } = useAuthStore();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,14 +20,23 @@ export default function InboxPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    if (!company?.id) { setLoading(false); return; }
     setLoading(true);
-    const params = new URLSearchParams();
-    if (status !== 'all') params.set('status', status);
-    api.get<Conversation[]>(`/conversations?${params}`)
-      .then(setConversations)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [status]);
+    const supabase = createClient();
+    let query = supabase
+      .from('conversations')
+      .select('*, contact:contacts(id, name, phone, avatar_url, email)')
+      .eq('company_id', company.id)
+      .order('last_message_at', { ascending: false, nullsFirst: false });
+
+    if (status !== 'all') query = query.eq('status', status);
+
+    (async () => {
+      const { data, error } = await query;
+      if (!error && data) setConversations(data as unknown as Conversation[]);
+      setLoading(false);
+    })();
+  }, [company?.id, status]);
 
   const filtered = conversations.filter((c) => {
     if (!search) return true;
@@ -45,7 +55,6 @@ export default function InboxPage() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Sidebar panel */}
       <div className="w-80 flex flex-col border-r bg-background">
         <div className="p-4 border-b space-y-3">
           <h1 className="text-lg font-semibold">Inbox</h1>
@@ -79,7 +88,6 @@ export default function InboxPage() {
         />
       </div>
 
-      {/* Chat area */}
       <div className="flex-1 overflow-hidden">
         {selected ? (
           <ChatWindow conversation={selected} onStatusChange={handleStatusChange} />

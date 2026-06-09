@@ -10,35 +10,55 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Header } from '@/components/layout/header';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
 import type { AISettings } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
 
 export default function AiBotPage() {
   const { toast } = useToast();
+  const { company } = useAuthStore();
   const [settings, setSettings] = useState<AISettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.get<AISettings>('/ai/settings')
-      .then(setSettings)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    if (!company?.id) { setLoading(false); return; }
+    const supabase = createClient();
+    supabase
+      .from('ai_settings')
+      .select('*')
+      .eq('company_id', company.id)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) setSettings(data as unknown as AISettings);
+        setLoading(false);
+      });
+  }, [company?.id]);
 
   const handleSave = async () => {
-    if (!settings) return;
+    if (!settings || !company?.id) return;
     setSaving(true);
-    try {
-      const updated = await api.patch<AISettings>('/ai/settings', settings);
-      setSettings(updated);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('ai_settings')
+      .update({
+        is_enabled: settings.is_enabled,
+        auto_reply: settings.auto_reply,
+        handover_keyword: settings.handover_keyword,
+        system_prompt: settings.system_prompt,
+        model: settings.model,
+      })
+      .eq('company_id', company.id)
+      .select()
+      .single();
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      setSettings(data as unknown as AISettings);
       toast({ title: 'AI settings saved' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
 
   if (loading) {
@@ -66,7 +86,6 @@ export default function AiBotPage() {
       />
 
       <div className="p-6 max-w-3xl space-y-6">
-        {/* Master toggle */}
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-start justify-between">
@@ -123,9 +142,7 @@ export default function AiBotPage() {
             <div className="space-y-2">
               <Label>AI Model</Label>
               <Select value={settings?.model ?? 'gpt-4o-mini'} onValueChange={(v) => setSettings((s) => s ? { ...s, model: v } : s)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="gpt-4o-mini">GPT-4o Mini (Fast, affordable)</SelectItem>
                   <SelectItem value="gpt-4o">GPT-4o (Best quality)</SelectItem>
@@ -137,7 +154,7 @@ export default function AiBotPage() {
               <Label>System prompt</Label>
               <Textarea
                 rows={6}
-                placeholder="You are a helpful customer support assistant for {company}. Be friendly, concise and helpful. If you don't know the answer, say so and offer to connect them to a human agent."
+                placeholder="You are a helpful customer support assistant. Be friendly, concise and helpful."
                 value={settings?.system_prompt ?? ''}
                 onChange={(e) => setSettings((s) => s ? { ...s, system_prompt: e.target.value } : s)}
               />

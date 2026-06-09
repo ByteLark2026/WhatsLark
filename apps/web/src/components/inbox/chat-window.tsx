@@ -1,16 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Send, Paperclip, MoreVertical, UserCheck, CheckCheck, Check, Clock, AlertCircle, StickyNote } from 'lucide-react';
+import { Send, MoreVertical, UserCheck, CheckCheck, Check, Clock, AlertCircle, StickyNote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn, getInitials, formatRelativeTime } from '@/lib/utils';
-import { api } from '@/lib/api';
-import { ConversationStatus } from '@whatslark/shared';
-import type { Conversation, Message, MessageStatus } from '@whatslark/shared';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
+import { ConversationStatus, MessageDirection, MessageStatus, MessageType } from '@whatslark/shared';
+import type { Conversation, Message } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -27,6 +28,7 @@ const statusIcon: Record<MessageStatus, React.ReactNode> = {
 
 export function ChatWindow({ conversation, onStatusChange }: Props) {
   const { toast } = useToast();
+  const { user, company } = useAuthStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -39,10 +41,16 @@ export function ChatWindow({ conversation, onStatusChange }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    api.get<Message[]>(`/messages/conversation/${conversation.id}`)
-      .then(setMessages)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    const supabase = createClient();
+    (async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversation.id)
+        .order('created_at', { ascending: true });
+      if (!error && data) setMessages(data as unknown as Message[]);
+      setLoading(false);
+    })();
   }, [conversation.id]);
 
   useEffect(() => {
@@ -50,37 +58,48 @@ export function ChatWindow({ conversation, onStatusChange }: Props) {
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || !user?.id || !company?.id) return;
     setSending(true);
-    try {
-      const msg = await api.post<Message>('/messages', {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
         conversation_id: conversation.id,
+        company_id: company.id,
+        direction: MessageDirection.OUTBOUND,
+        type: MessageType.TEXT,
         content: text.trim(),
-        type: 'text',
+        status: MessageStatus.SENT,
+        sender_id: user.id,
         is_note: isNote,
-      });
-      setMessages((prev) => [...prev, msg]);
+      })
+      .select()
+      .single();
+    if (error) {
+      toast({ title: 'Failed to send', description: error.message, variant: 'destructive' });
+    } else {
+      setMessages((prev) => [...prev, data as unknown as Message]);
       setText('');
-    } catch (err: any) {
-      toast({ title: 'Failed to send', description: err.message, variant: 'destructive' });
-    } finally {
-      setSending(false);
     }
+    setSending(false);
   };
 
   const updateStatus = async (status: Conversation['status']) => {
-    try {
-      await api.patch(`/conversations/${conversation.id}`, { status });
-      onStatusChange(conversation.id, status);
-      toast({ title: 'Conversation updated' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('conversations')
+      .update({ status })
+      .eq('id', conversation.id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
     }
+    onStatusChange(conversation.id, status);
+    toast({ title: 'Conversation updated' });
   };
 
   return (
     <div className="flex flex-col h-full">
-      {/* Chat header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-3">
           <Avatar className="w-9 h-9">
@@ -122,7 +141,6 @@ export function ChatWindow({ conversation, onStatusChange }: Props) {
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {loading ? (
           <div className="space-y-3">
@@ -132,22 +150,24 @@ export function ChatWindow({ conversation, onStatusChange }: Props) {
               </div>
             ))}
           </div>
+        ) : messages.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground py-8">No messages yet</p>
         ) : messages.map((msg) => {
           const isOut = msg.direction === 'outbound';
-          const isNote = msg.is_note;
+          const isNoteMsg = msg.is_note;
           return (
             <div key={msg.id} className={cn('flex', isOut ? 'justify-end' : 'justify-start')}>
               <div
                 className={cn(
                   'max-w-[70%] px-3.5 py-2 rounded-2xl text-sm',
-                  isNote
+                  isNoteMsg
                     ? 'bg-yellow-50 border border-yellow-200 text-yellow-900'
                     : isOut
                     ? 'bg-primary text-white rounded-br-sm'
                     : 'bg-muted rounded-bl-sm',
                 )}
               >
-                {isNote && (
+                {isNoteMsg && (
                   <div className="flex items-center gap-1 mb-1 text-yellow-600">
                     <StickyNote className="w-3 h-3" />
                     <span className="text-xs font-medium">Internal note</span>
@@ -158,7 +178,7 @@ export function ChatWindow({ conversation, onStatusChange }: Props) {
                   <span className={cn('text-[10px]', isOut ? 'text-white/70' : 'text-muted-foreground')}>
                     {formatRelativeTime(msg.created_at)}
                   </span>
-                  {isOut && !isNote && statusIcon[msg.status]}
+                  {isOut && !isNoteMsg && statusIcon[msg.status]}
                 </div>
               </div>
             </div>
@@ -167,7 +187,6 @@ export function ChatWindow({ conversation, onStatusChange }: Props) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
       <div className="border-t p-3 space-y-2">
         {isNote && (
           <div className="flex items-center gap-2 px-1">

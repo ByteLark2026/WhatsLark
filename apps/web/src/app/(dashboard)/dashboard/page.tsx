@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Header } from '@/components/layout/header';
-import { api } from '@/lib/api';
-import { getInitials, formatRelativeTime } from '@/lib/utils';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
+import { getInitials } from '@/lib/utils';
 import type { DashboardStats, LeadStage } from '@whatslark/shared';
 
 const STAGE_LABELS: Record<LeadStage, string> = {
@@ -29,15 +30,39 @@ const STAGE_COLORS: Record<LeadStage, string> = {
 };
 
 export default function DashboardPage() {
+  const { company } = useAuthStore();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<DashboardStats>('/dashboard/stats')
-      .then(setStats)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    if (!company?.id) { setLoading(false); return; }
+    const supabase = createClient();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    Promise.all([
+      supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('company_id', company.id),
+      supabase.from('conversations').select('*', { count: 'exact', head: true }).eq('company_id', company.id).eq('status', 'open'),
+      supabase.from('messages').select('*', { count: 'exact', head: true }).eq('company_id', company.id).gte('created_at', todayStart.toISOString()),
+      supabase.from('campaigns').select('*', { count: 'exact', head: true }).eq('company_id', company.id).in('status', ['running', 'scheduled']),
+      supabase.from('leads').select('stage').eq('company_id', company.id),
+    ]).then(([contacts, openConvs, msgsToday, activeCampaigns, leads]) => {
+      const leadsByStage: Record<string, number> = {};
+      if (leads.data) {
+        for (const lead of leads.data) {
+          leadsByStage[lead.stage] = (leadsByStage[lead.stage] ?? 0) + 1;
+        }
+      }
+      setStats({
+        total_contacts: contacts.count ?? 0,
+        open_conversations: openConvs.count ?? 0,
+        messages_today: msgsToday.count ?? 0,
+        active_campaigns: activeCampaigns.count ?? 0,
+        leads_by_stage: leadsByStage as Record<LeadStage, number>,
+        agent_performance: [],
+      });
+    }).finally(() => setLoading(false));
+  }, [company?.id]);
 
   const statCards = [
     { label: 'Total Contacts', value: stats?.total_contacts ?? 0, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -50,7 +75,6 @@ export default function DashboardPage() {
     <div>
       <Header title="Dashboard" subtitle="Your workspace at a glance" />
       <div className="p-6 space-y-6">
-        {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {statCards.map((s) => (
             <Card key={s.label}>
@@ -72,7 +96,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Leads by stage */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -86,7 +109,7 @@ export default function DashboardPage() {
                     <div key={i} className="h-8 bg-muted animate-pulse rounded" />
                   ))}
                 </div>
-              ) : stats?.leads_by_stage ? (
+              ) : stats?.leads_by_stage && Object.keys(stats.leads_by_stage).length > 0 ? (
                 <div className="space-y-3">
                   {(Object.entries(stats.leads_by_stage) as [LeadStage, number][]).map(([stage, count]) => (
                     <div key={stage} className="flex items-center justify-between">
@@ -111,7 +134,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Agent performance */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -122,27 +144,6 @@ export default function DashboardPage() {
               {loading ? (
                 <div className="space-y-3">
                   {[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-muted animate-pulse rounded" />)}
-                </div>
-              ) : stats?.agent_performance?.length ? (
-                <div className="space-y-3">
-                  {stats.agent_performance.map((agent) => (
-                    <div key={agent.agent_id} className="flex items-center gap-3">
-                      <Avatar className="w-8 h-8">
-                        <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                          {getInitials(agent.agent_name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{agent.agent_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {agent.open_conversations} open · {agent.closed_today} closed today
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-xs whitespace-nowrap">
-                        {agent.avg_response_time_minutes}m avg
-                      </Badge>
-                    </div>
-                  ))}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-4">No agent data yet</p>

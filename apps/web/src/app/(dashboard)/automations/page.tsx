@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Zap, ToggleLeft, ToggleRight, MoreHorizontal } from 'lucide-react';
+import { Plus, Zap, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Header } from '@/components/layout/header';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
 import { AutomationTrigger, AutomationAction } from '@whatslark/shared';
 import type { AutomationRule } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
@@ -28,23 +29,35 @@ const ACTION_LABELS: Record<AutomationAction, string> = {
 
 export default function AutomationsPage() {
   const { toast } = useToast();
+  const { company } = useAuthStore();
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<AutomationRule[]>('/automations')
-      .then(setRules)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    if (!company?.id) { setLoading(false); return; }
+    const supabase = createClient();
+    (async () => {
+      const { data, error } = await supabase
+        .from('automation_rules')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+      if (!error && data) setRules(data as unknown as AutomationRule[]);
+      setLoading(false);
+    })();
+  }, [company?.id]);
 
   const toggleRule = async (rule: AutomationRule) => {
-    try {
-      await api.patch(`/automations/${rule.id}`, { is_active: !rule.is_active });
-      setRules((prev) => prev.map((r) => r.id === rule.id ? { ...r, is_active: !r.is_active } : r));
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('automation_rules')
+      .update({ is_active: !rule.is_active })
+      .eq('id', rule.id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
     }
+    setRules((prev) => prev.map((r) => r.id === rule.id ? { ...r, is_active: !r.is_active } : r));
   };
 
   return (
@@ -54,7 +67,6 @@ export default function AutomationsPage() {
         subtitle="Set rules to automate your workflow"
         actions={<Button size="sm"><Plus className="w-4 h-4 mr-2" />New automation</Button>}
       />
-
       <div className="p-6">
         {loading ? (
           <div className="space-y-3">

@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
 import { TemplateStatus } from '@whatslark/shared';
 import type { MessageTemplate } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +32,7 @@ const statusVariant: Record<TemplateStatus, any> = {
 
 export default function TemplatesPage() {
   const { toast } = useToast();
+  const { company } = useAuthStore();
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -38,29 +40,44 @@ export default function TemplatesPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.get<MessageTemplate[]>('/templates')
-      .then(setTemplates)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    if (!company?.id) { setLoading(false); return; }
+    const supabase = createClient();
+    (async () => {
+      const { data, error } = await supabase
+        .from('message_templates')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+      if (!error && data) setTemplates(data as unknown as MessageTemplate[]);
+      setLoading(false);
+    })();
+  }, [company?.id]);
 
   const handleAdd = async () => {
+    if (!company?.id) return;
     setSaving(true);
-    try {
-      const template = await api.post<MessageTemplate>('/templates', {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('message_templates')
+      .insert({
+        company_id: company.id,
         name: form.name,
         language: form.language,
         category: form.category,
         components: [{ type: 'BODY', text: form.body }],
-      });
-      setTemplates((prev) => [template, ...prev]);
+        status: 'pending',
+      })
+      .select()
+      .single();
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      setTemplates((prev) => [data as unknown as MessageTemplate, ...prev]);
       setShowAdd(false);
+      setForm({ name: '', language: 'en', category: 'MARKETING', body: '' });
       toast({ title: 'Template created — pending approval' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
 
   return (
