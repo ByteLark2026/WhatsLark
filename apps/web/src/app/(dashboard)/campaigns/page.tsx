@@ -43,7 +43,7 @@ interface Stats {
 
 export default function CampaignsPage() {
   const { toast } = useToast();
-  const { company } = useAuthStore();
+  const { company, user } = useAuthStore();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats>({ total: 0, recipients: 0, deliveryRate: 0, readRate: 0, failed: 0 });
@@ -51,6 +51,8 @@ export default function CampaignsPage() {
   // Dialog state
   const [showCreate, setShowCreate] = useState(false);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [channels, setChannels] = useState<WhatsAppChannel[]>([]);
+  const [channelId, setChannelId] = useState('');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactSearch, setContactSearch] = useState('');
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
@@ -97,22 +99,29 @@ export default function CampaignsPage() {
     setShowCreate(true);
     if (!company?.id) return;
     const supabase = createClient();
-    const [tplRes, ctRes] = await Promise.all([
+    const [tplRes, ctRes, chRes] = await Promise.all([
       supabase.from('message_templates').select('*').eq('company_id', company.id).eq('status', 'approved'),
       supabase.from('contacts').select('id, name, phone').eq('company_id', company.id).eq('is_blocked', false).order('name'),
+      supabase.from('whatsapp_channels').select('id, name, phone_number').eq('company_id', company.id).eq('is_active', true),
     ]);
     if (tplRes.data) setTemplates(tplRes.data as unknown as MessageTemplate[]);
     if (ctRes.data) setContacts(ctRes.data as unknown as Contact[]);
+    if (chRes.data) {
+      setChannels(chRes.data as unknown as WhatsAppChannel[]);
+      setChannelId(chRes.data.length === 1 ? chRes.data[0].id : '');
+    }
   };
 
   const handleCreate = async () => {
-    if (!company?.id || !form.name || !selectedTemplate) return;
+    if (!company?.id || !user?.id || !form.name || !selectedTemplate || !channelId) return;
     setCreating(true);
     const supabase = createClient();
     const { data, error } = await supabase
       .from('campaigns')
       .insert({
         company_id: company.id,
+        channel_id: channelId,
+        created_by: user.id,
         name: form.name,
         status: 'draft',
         template_id: selectedTemplate.id,
@@ -135,6 +144,7 @@ export default function CampaignsPage() {
       setForm({ name: '', description: '', scheduled_at: '', auto_retry: false });
       setSelectedContacts([]);
       setSelectedTemplate(null);
+      setChannelId('');
       toast({ title: 'Campaign created', description: 'Campaign saved as draft.' });
     }
     setCreating(false);
@@ -346,6 +356,31 @@ export default function CampaignsPage() {
                 )}
               </div>
 
+              {/* Channel */}
+              <div className="border rounded-lg p-4 space-y-3">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <span className="text-base">📱</span> WhatsApp channel
+                </h4>
+                {channels.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No active channels. <a href="/channels" className="text-primary hover:underline">Connect one first.</a>
+                  </p>
+                ) : (
+                  <Select value={channelId} onValueChange={setChannelId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a channel…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {channels.map((ch) => (
+                        <SelectItem key={ch.id} value={ch.id}>
+                          {ch.name} <span className="text-muted-foreground ml-1">· {ch.phone_number}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
               {/* Scheduling */}
               <div className="border rounded-lg p-4 space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
@@ -435,7 +470,7 @@ export default function CampaignsPage() {
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button
               onClick={handleCreate}
-              disabled={creating || !form.name || !selectedTemplate}
+              disabled={creating || !form.name || !selectedTemplate || !channelId}
             >
               {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Start Campaign
