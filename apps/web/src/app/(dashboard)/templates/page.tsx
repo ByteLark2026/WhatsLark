@@ -7,16 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Header } from '@/components/layout/header';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth';
 import { TemplateStatus } from '@whatslark/shared';
-import type { MessageTemplate } from '@whatslark/shared';
+import type { MessageTemplate, TemplateComponent } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
+import { TemplateEditorDialog } from '@/components/templates/template-editor-dialog';
 
 const statusIcon = {
   pending: <Clock className="w-3.5 h-3.5 text-yellow-600" />,
@@ -30,8 +26,6 @@ const statusVariant: Record<TemplateStatus, any> = {
   rejected: 'destructive',
 };
 
-const BLANK_FORM = { name: '', language: 'en', category: 'MARKETING', body: '' };
-
 export default function TemplatesPage() {
   const { toast } = useToast();
   const { company } = useAuthStore();
@@ -39,7 +33,6 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<MessageTemplate | null>(null);
-  const [form, setForm] = useState(BLANK_FORM);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -57,25 +50,23 @@ export default function TemplatesPage() {
   }, [company?.id]);
 
   const openEdit = (tpl: MessageTemplate) => {
-    const body = tpl.components.find((c) => c.type === 'BODY')?.text || '';
-    setForm({ name: tpl.name, language: tpl.language, category: tpl.category, body });
     setEditTarget(tpl);
   };
 
-  const closeEdit = () => { setEditTarget(null); setForm(BLANK_FORM); };
+  const closeEdit = () => setEditTarget(null);
 
-  const handleAdd = async () => {
+  const handleAdd = async (data: { name: string; language: string; category: string; components: TemplateComponent[] }) => {
     if (!company?.id) return;
     setSaving(true);
     const supabase = createClient();
-    const { data, error } = await supabase
+    const { data: created, error } = await supabase
       .from('message_templates')
       .insert({
         company_id: company.id,
-        name: form.name,
-        language: form.language,
-        category: form.category,
-        components: [{ type: 'BODY', text: form.body }],
+        name: data.name,
+        language: data.language,
+        category: data.category,
+        components: data.components,
         status: 'pending',
       })
       .select()
@@ -83,37 +74,33 @@ export default function TemplatesPage() {
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
-      setTemplates((prev) => [data as unknown as MessageTemplate, ...prev]);
+      setTemplates((prev) => [created as unknown as MessageTemplate, ...prev]);
       setShowAdd(false);
-      setForm(BLANK_FORM);
       toast({ title: 'Template created — pending approval' });
     }
     setSaving(false);
   };
 
-  const handleEdit = async () => {
+  const handleEdit = async (data: { name: string; language: string; category: string; components: TemplateComponent[] }) => {
     if (!editTarget) return;
     setSaving(true);
     const supabase = createClient();
-    const updated = {
-      name: form.name,
-      language: form.language,
-      category: form.category,
-      components: editTarget.components.map((c) =>
-        c.type === 'BODY' ? { ...c, text: form.body } : c
-      ),
-      status: 'pending' as TemplateStatus,
-    };
-    const { data, error } = await supabase
+    const { data: updated, error } = await supabase
       .from('message_templates')
-      .update(updated)
+      .update({
+        name: data.name,
+        language: data.language,
+        category: data.category,
+        components: data.components,
+        status: 'pending' as TemplateStatus,
+      })
       .eq('id', editTarget.id)
       .select()
       .single();
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
-      setTemplates((prev) => prev.map((t) => t.id === editTarget.id ? data as unknown as MessageTemplate : t));
+      setTemplates((prev) => prev.map((t) => t.id === editTarget.id ? updated as unknown as MessageTemplate : t));
       closeEdit();
       toast({ title: 'Template updated — pending re-approval' });
     }
@@ -215,108 +202,23 @@ export default function TemplatesPage() {
         )}
       </div>
 
-      {/* Edit dialog */}
-      <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) closeEdit(); }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Edit template</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Template name *</Label>
-              <Input placeholder="order_confirmation" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value.toLowerCase().replace(/\s/g, '_') })} />
-              <p className="text-xs text-muted-foreground">Lowercase, underscores only</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Language</Label>
-                <Select value={form.language} onValueChange={(v) => setForm({ ...form, language: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {['en', 'ms', 'id', 'th', 'ar', 'es', 'pt', 'fr', 'de', 'zh'].map((l) => (
-                      <SelectItem key={l} value={l}>{l.toUpperCase()}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {['MARKETING', 'UTILITY', 'AUTHENTICATION'].map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Body text *</Label>
-              <Textarea
-                rows={4}
-                placeholder="Hello {{1}}, your order {{2}} has been confirmed!"
-                value={form.body}
-                onChange={(e) => setForm({ ...form, body: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">Use &#123;&#123;1&#125;&#125;, &#123;&#123;2&#125;&#125; for variables</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeEdit}>Cancel</Button>
-            <Button onClick={handleEdit} disabled={saving || !form.name || !form.body}>Save changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TemplateEditorDialog
+        open={!!editTarget}
+        onOpenChange={(open) => { if (!open) closeEdit(); }}
+        mode="edit"
+        initial={editTarget}
+        saving={saving}
+        onSave={handleEdit}
+      />
 
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create template</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Template name *</Label>
-              <Input placeholder="order_confirmation" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value.toLowerCase().replace(/\s/g, '_') })} />
-              <p className="text-xs text-muted-foreground">Lowercase, underscores only</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Language</Label>
-                <Select value={form.language} onValueChange={(v) => setForm({ ...form, language: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {['en', 'ms', 'id', 'th', 'ar', 'es', 'pt', 'fr', 'de', 'zh'].map((l) => (
-                      <SelectItem key={l} value={l}>{l.toUpperCase()}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {['MARKETING', 'UTILITY', 'AUTHENTICATION'].map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Body text *</Label>
-              <Textarea
-                rows={4}
-                placeholder="Hello {{1}}, your order {{2}} has been confirmed!"
-                value={form.body}
-                onChange={(e) => setForm({ ...form, body: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">Use &#123;&#123;1&#125;&#125;, &#123;&#123;2&#125;&#125; for variables</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button onClick={handleAdd} disabled={saving || !form.name || !form.body}>Create template</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TemplateEditorDialog
+        open={showAdd}
+        onOpenChange={setShowAdd}
+        mode="create"
+        initial={null}
+        saving={saving}
+        onSave={handleAdd}
+      />
     </div>
   );
 }

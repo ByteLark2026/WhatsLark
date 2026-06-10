@@ -242,17 +242,31 @@ export interface MessageTemplate extends BaseEntity {
 }
 
 export interface TemplateComponent {
-  type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS';
-  format?: 'TEXT' | 'IMAGE' | 'DOCUMENT' | 'VIDEO';
+  type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS' | 'CAROUSEL' | 'LIMITED_TIME_OFFER';
+  format?: 'TEXT' | 'IMAGE' | 'DOCUMENT' | 'VIDEO' | 'LOCATION';
   text?: string;
   buttons?: TemplateButton[];
+  limited_time_offer?: {
+    text: string;
+    has_expiration?: boolean;
+  };
+  cards?: TemplateCarouselCard[];
+}
+
+export interface TemplateCarouselCard {
+  components: TemplateComponent[];
+  product_retailer_id?: string;
 }
 
 export interface TemplateButton {
-  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE' | 'CATALOG' | 'MPM' | 'SPM' | 'VOICE_CALL';
   text: string;
   url?: string;
   phone_number?: string;
+  example?: string;
+  catalog_id?: string;
+  product_retailer_id?: string;
+  sections?: { title: string; product_retailer_ids: string[] }[];
 }
 
 // ----- Quick Reply -----
