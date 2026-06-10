@@ -10,7 +10,8 @@ import { Header } from '@/components/layout/header';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
 import { getInitials, formatRelativeTime } from '@/lib/utils';
 import type { Contact } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
@@ -18,19 +19,28 @@ import Link from 'next/link';
 
 export default function ContactsPage() {
   const { toast } = useToast();
+  const { company } = useAuthStore();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: '', phone: '', email: '', tags: '' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.get<Contact[]>('/contacts')
-      .then(setContacts)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    if (!company?.id) { setLoading(false); return; }
+    const supabase = createClient();
+    (async () => {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+      if (error) console.error(error);
+      if (data) setContacts(data as Contact[]);
+      setLoading(false);
+    })();
+  }, [company?.id]);
 
   const filtered = contacts.filter((c) => {
     const q = search.toLowerCase();
@@ -38,16 +48,24 @@ export default function ContactsPage() {
   });
 
   const handleAdd = async () => {
+    if (!company?.id) return;
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
-      };
-      const contact = await api.post<Contact>('/contacts', payload);
-      setContacts((prev) => [contact, ...prev]);
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('contacts')
+        .insert({
+          company_id: company.id,
+          name: form.name || null,
+          phone: form.phone,
+          email: form.email || null,
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      setContacts((prev) => [data as Contact, ...prev]);
       setShowAdd(false);
-      setForm({ name: '', phone: '', email: '', tags: '' });
+      setForm({ name: '', phone: '', email: '' });
       toast({ title: 'Contact added' });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -172,10 +190,6 @@ export default function ContactsPage() {
             <div className="space-y-2">
               <Label>Email</Label>
               <Input type="email" placeholder="john@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Tags (comma-separated)</Label>
-              <Input placeholder="vip, lead, customer" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
             </div>
           </div>
           <DialogFooter>
