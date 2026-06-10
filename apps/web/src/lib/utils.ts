@@ -6,12 +6,13 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions) {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    ...options,
-  }).format(new Date(date));
+  // Intl.DateTimeFormat throws if dateStyle/timeStyle is mixed with
+  // component options like month/day/year, so only apply the defaults
+  // when the caller hasn't requested a style-based format.
+  const base: Intl.DateTimeFormatOptions = options?.dateStyle || options?.timeStyle
+    ? {}
+    : { month: 'short', day: 'numeric', year: 'numeric' };
+  return new Intl.DateTimeFormat('en-US', { ...base, ...options }).format(new Date(date));
 }
 
 export function formatRelativeTime(date: string | Date): string {
