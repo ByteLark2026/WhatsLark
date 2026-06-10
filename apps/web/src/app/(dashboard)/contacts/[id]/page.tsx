@@ -1,28 +1,125 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { ArrowLeft, Phone, Mail, MessageSquare, Edit2 } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Phone, Mail, MessageSquare, Edit2, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { api } from '@/lib/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
 import { getInitials, formatDate } from '@/lib/utils';
 import type { Contact } from '@whatslark/shared';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const { toast } = useToast();
+  const { company } = useAuthStore();
   const [contact, setContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showEdit, setShowEdit] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '' });
+  const [saving, setSaving] = useState(false);
+  const [messaging, setMessaging] = useState(false);
 
   useEffect(() => {
-    api.get<Contact>(`/contacts/${id}`)
-      .then(setContact)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    const supabase = createClient();
+    (async () => {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (error) console.error(error);
+      if (data) setContact(data as Contact);
+      setLoading(false);
+    })();
   }, [id]);
+
+  const openEdit = () => {
+    if (!contact) return;
+    setForm({ name: contact.name || '', email: contact.email || '' });
+    setShowEdit(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!contact) return;
+    setSaving(true);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('contacts')
+      .update({ name: form.name || null, email: form.email || null })
+      .eq('id', contact.id)
+      .select('*')
+      .single();
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      setContact(data as Contact);
+      setShowEdit(false);
+      toast({ title: 'Contact updated' });
+    }
+    setSaving(false);
+  };
+
+  const handleMessage = async () => {
+    if (!contact || !company?.id) return;
+    setMessaging(true);
+    const supabase = createClient();
+    try {
+      const { data: channel } = await supabase
+        .from('whatsapp_channels')
+        .select('id')
+        .eq('company_id', company.id)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+
+      if (!channel) {
+        toast({ title: 'No WhatsApp channel connected', description: 'Connect a WhatsApp number in Settings first.', variant: 'destructive' });
+        return;
+      }
+
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('company_id', company.id)
+        .eq('contact_id', contact.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let conversationId = existing?.id;
+
+      if (!conversationId) {
+        const { data: created, error } = await supabase
+          .from('conversations')
+          .insert({
+            company_id: company.id,
+            contact_id: contact.id,
+            channel_id: channel.id,
+            status: 'open',
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        conversationId = created.id;
+      }
+
+      router.push(`/inbox?conversation=${conversationId}`);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setMessaging(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -54,8 +151,11 @@ export default function ContactDetailPage() {
             <p className="text-muted-foreground">{contact.phone}</p>
           </div>
         </div>
-        <Button variant="outline"><Edit2 className="w-4 h-4 mr-2" />Edit</Button>
-        <Button><MessageSquare className="w-4 h-4 mr-2" />Message</Button>
+        <Button variant="outline" onClick={openEdit}><Edit2 className="w-4 h-4 mr-2" />Edit</Button>
+        <Button onClick={handleMessage} disabled={messaging}>
+          {messaging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MessageSquare className="w-4 h-4 mr-2" />}
+          Message
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -105,6 +205,29 @@ export default function ContactDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={showEdit} onOpenChange={setShowEdit}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit contact</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input placeholder="John Smith" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input type="email" placeholder="john@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={saving}>
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

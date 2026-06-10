@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Search, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,6 +14,8 @@ import type { Conversation } from '@whatslark/shared';
 
 export default function InboxPage() {
   const { company } = useAuthStore();
+  const searchParams = useSearchParams();
+  const conversationParam = searchParams.get('conversation');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +40,25 @@ export default function InboxPage() {
       setLoading(false);
     })();
   }, [company?.id, status]);
+
+  useEffect(() => {
+    if (!conversationParam || !company?.id) return;
+    const fromList = conversations.find((c) => c.id === conversationParam);
+    if (fromList) {
+      setSelected(fromList);
+      return;
+    }
+    const supabase = createClient();
+    (async () => {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*, contact:contacts(id, name, phone, avatar_url, email)')
+        .eq('id', conversationParam)
+        .eq('company_id', company.id)
+        .maybeSingle();
+      if (!error && data) setSelected(data as unknown as Conversation);
+    })();
+  }, [conversationParam, conversations, company?.id]);
 
   const filtered = conversations.filter((c) => {
     if (!search) return true;

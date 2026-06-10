@@ -1,20 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, DollarSign } from 'lucide-react';
+import { Plus, DollarSign, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Header } from '@/components/layout/header';
-import { api } from '@/lib/api';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
 import { getInitials, formatCurrency } from '@/lib/utils';
 import { LeadStage } from '@whatslark/shared';
-import type { Lead } from '@whatslark/shared';
+import type { Lead, Contact } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
 
 const STAGES: { stage: LeadStage; label: string; color: string; bg: string }[] = [
@@ -28,34 +29,74 @@ const STAGES: { stage: LeadStage; label: string; color: string; bg: string }[] =
 
 export default function LeadsPage() {
   const { toast } = useToast();
+  const { company } = useAuthStore();
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: '', contact_id: '', stage: LeadStage.NEW_LEAD, deal_value: '', currency: 'USD', notes: '' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.get<Lead[]>('/leads')
-      .then(setLeads)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    if (!company?.id) { setLoading(false); return; }
+    const supabase = createClient();
+    (async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*, contact:contacts(id, name, phone)')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+      if (error) console.error(error);
+      if (data) setLeads(data as unknown as Lead[]);
+      setLoading(false);
+    })();
+
+    (async () => {
+      const { data } = await supabase
+        .from('contacts')
+        .select('id, name, phone')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+      if (data) setContacts(data as Contact[]);
+    })();
+  }, [company?.id]);
 
   const handleAdd = async () => {
+    if (!company?.id) return;
     setSaving(true);
-    try {
-      const lead = await api.post<Lead>('/leads', {
-        ...form,
-        deal_value: form.deal_value ? parseFloat(form.deal_value) : undefined,
-      });
-      setLeads((prev) => [lead, ...prev]);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('leads')
+      .insert({
+        company_id: company.id,
+        contact_id: form.contact_id,
+        title: form.title,
+        stage: form.stage,
+        deal_value: form.deal_value ? parseFloat(form.deal_value) : null,
+        currency: form.currency,
+        notes: form.notes || null,
+      })
+      .select('*, contact:contacts(id, name, phone)')
+      .single();
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      setLeads((prev) => [data as unknown as Lead, ...prev]);
       setShowAdd(false);
+      setForm({ title: '', contact_id: '', stage: LeadStage.NEW_LEAD, deal_value: '', currency: 'USD', notes: '' });
       toast({ title: 'Lead created' });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
+  };
+
+  const handleMoveStage = async (lead: Lead, stage: LeadStage) => {
+    const supabase = createClient();
+    const { error } = await supabase.from('leads').update({ stage }).eq('id', lead.id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, stage } : l));
   };
 
   const byStage = (stage: LeadStage) => leads.filter((l) => l.stage === stage);
@@ -91,9 +132,25 @@ export default function LeadsPage() {
                       <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
                     ))
                   ) : stageLeads.map((lead) => (
-                    <Card key={lead.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                    <Card key={lead.id} className="hover:shadow-md transition-shadow">
                       <CardContent className="p-3 space-y-2">
-                        <p className="font-medium text-sm">{lead.title}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium text-sm">{lead.title}</p>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 -mt-1 -mr-1 shrink-0">
+                                <MoreHorizontal className="w-3.5 h-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {STAGES.filter((s) => s.stage !== lead.stage).map((s) => (
+                                <DropdownMenuItem key={s.stage} onClick={() => handleMoveStage(lead, s.stage)}>
+                                  Move to {s.label}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                         {lead.contact && (
                           <div className="flex items-center gap-2">
                             <Avatar className="w-6 h-6">
@@ -131,6 +188,17 @@ export default function LeadsPage() {
               <Input placeholder="Deal title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </div>
             <div className="space-y-2">
+              <Label>Contact *</Label>
+              <Select value={form.contact_id} onValueChange={(v) => setForm({ ...form, contact_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Select a contact" /></SelectTrigger>
+                <SelectContent>
+                  {contacts.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name || c.phone}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label>Stage</Label>
               <Select value={form.stage} onValueChange={(v) => setForm({ ...form, stage: v as LeadStage })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -157,7 +225,7 @@ export default function LeadsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button onClick={handleAdd} disabled={saving || !form.title}>Create lead</Button>
+            <Button onClick={handleAdd} disabled={saving || !form.title || !form.contact_id}>Create lead</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

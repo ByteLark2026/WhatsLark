@@ -16,9 +16,11 @@ import { getInitials, formatRelativeTime } from '@/lib/utils';
 import type { Contact } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function ContactsPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const { company } = useAuthStore();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +74,71 @@ export default function ContactsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleStartConversation = async (contact: Contact) => {
+    if (!company?.id) return;
+    const supabase = createClient();
+    try {
+      const { data: channel } = await supabase
+        .from('whatsapp_channels')
+        .select('id')
+        .eq('company_id', company.id)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+
+      if (!channel) {
+        toast({ title: 'No WhatsApp channel connected', description: 'Connect a WhatsApp number in Settings first.', variant: 'destructive' });
+        return;
+      }
+
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('company_id', company.id)
+        .eq('contact_id', contact.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let conversationId = existing?.id;
+
+      if (!conversationId) {
+        const { data: created, error } = await supabase
+          .from('conversations')
+          .insert({
+            company_id: company.id,
+            contact_id: contact.id,
+            channel_id: channel.id,
+            status: 'open',
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        conversationId = created.id;
+      }
+
+      router.push(`/inbox?conversation=${conversationId}`);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleToggleBlock = async (contact: Contact) => {
+    if (!company?.id) return;
+    const supabase = createClient();
+    const next = !contact.is_blocked;
+    const { error } = await supabase
+      .from('contacts')
+      .update({ is_blocked: next })
+      .eq('id', contact.id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setContacts((prev) => prev.map((c) => c.id === contact.id ? { ...c, is_blocked: next } : c));
+    toast({ title: next ? 'Contact blocked' : 'Contact unblocked' });
   };
 
   return (
@@ -163,8 +230,10 @@ export default function ContactsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild><Link href={`/contacts/${contact.id}`}>View profile</Link></DropdownMenuItem>
-                        <DropdownMenuItem>Start conversation</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive">Block contact</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleStartConversation(contact)}>Start conversation</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleToggleBlock(contact)}>
+                          {contact.is_blocked ? 'Unblock contact' : 'Block contact'}
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>

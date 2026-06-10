@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Phone, CheckCircle, XCircle, Copy, MoreHorizontal } from 'lucide-react';
+import { Plus, Phone, CheckCircle, XCircle, Copy, MoreHorizontal, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,48 +10,167 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Header } from '@/components/layout/header';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { api } from '@/lib/api';
-import type { WhatsAppChannel } from '@whatslark/shared';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
+import type { WhatsAppChannel as BaseWhatsAppChannel } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
+
+type WhatsAppChannel = BaseWhatsAppChannel & { access_token: string };
+
+const BLANK = { name: '', phone_number: '', phone_number_id: '', business_account_id: '', access_token: '' };
 
 export default function ChannelsPage() {
   const { toast } = useToast();
+  const { company } = useAuthStore();
   const [channels, setChannels] = useState<WhatsAppChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: '', phone_number: '', phone_number_id: '', business_account_id: '', access_token: '' });
+  const [editTarget, setEditTarget] = useState<WhatsAppChannel | null>(null);
+  const [form, setForm] = useState(BLANK);
+  const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [verifyToken, setVerifyToken] = useState('');
 
   useEffect(() => {
-    api.get<WhatsAppChannel[]>('/whatsapp/channels')
-      .then(setChannels)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    if (!company?.id) { setLoading(false); return; }
+    const supabase = createClient();
+    (async () => {
+      const { data } = await supabase
+        .from('whatsapp_channels')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+      if (data) setChannels(data as WhatsAppChannel[]);
+      setLoading(false);
+    })();
 
-  const handleAdd = async () => {
+    (async () => {
+      const { data: companyRow } = await supabase
+        .from('companies')
+        .select('webhook_verify_token')
+        .eq('id', company.id)
+        .single();
+
+      if (companyRow?.webhook_verify_token) {
+        setVerifyToken(companyRow.webhook_verify_token);
+      } else {
+        const newToken = crypto.randomUUID().replace(/-/g, '').slice(0, 24);
+        const { error } = await supabase
+          .from('companies')
+          .update({ webhook_verify_token: newToken })
+          .eq('id', company.id);
+        if (!error) setVerifyToken(newToken);
+      }
+    })();
+  }, [company?.id]);
+
+  const openAdd = () => {
+    setEditTarget(null);
+    setForm(BLANK);
+    setShowAdd(true);
+  };
+
+  const openEdit = (ch: WhatsAppChannel) => {
+    setEditTarget(ch);
+    setForm({
+      name: ch.name,
+      phone_number: ch.phone_number,
+      phone_number_id: ch.phone_number_id,
+      business_account_id: ch.business_account_id,
+      access_token: ch.access_token,
+    });
+    setShowAdd(true);
+  };
+
+  const handleSave = async () => {
+    if (!company?.id) return;
     setSaving(true);
+    const supabase = createClient();
+
+    if (editTarget) {
+      const { data, error } = await supabase
+        .from('whatsapp_channels')
+        .update({
+          name: form.name,
+          phone_number: form.phone_number,
+          phone_number_id: form.phone_number_id,
+          business_account_id: form.business_account_id,
+          access_token: form.access_token,
+        })
+        .eq('id', editTarget.id)
+        .select()
+        .single();
+      if (error) {
+        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      } else {
+        setChannels((prev) => prev.map((c) => c.id === editTarget.id ? (data as WhatsAppChannel) : c));
+        setShowAdd(false);
+        toast({ title: 'Channel updated' });
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('whatsapp_channels')
+        .insert({
+          company_id: company.id,
+          name: form.name,
+          phone_number: form.phone_number,
+          phone_number_id: form.phone_number_id,
+          business_account_id: form.business_account_id,
+          access_token: form.access_token,
+          webhook_verify_token: verifyToken,
+          is_active: true,
+        })
+        .select()
+        .single();
+      if (error) {
+        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      } else {
+        setChannels((prev) => [data as WhatsAppChannel, ...prev]);
+        setShowAdd(false);
+        setForm(BLANK);
+        toast({ title: 'Channel connected' });
+      }
+    }
+    setSaving(false);
+  };
+
+  const handleRemove = async (ch: WhatsAppChannel) => {
+    if (!confirm(`Disconnect "${ch.name}"? This stops all WhatsApp messages on this number.`)) return;
+    const supabase = createClient();
+    const { error } = await supabase.from('whatsapp_channels').delete().eq('id', ch.id);
+    if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    else setChannels((prev) => prev.filter((c) => c.id !== ch.id));
+  };
+
+  const handleTestWebhook = async (ch: WhatsAppChannel) => {
+    const token = ch.webhook_verify_token || verifyToken;
     try {
-      const channel = await api.post<WhatsAppChannel>('/whatsapp/channels', form);
-      setChannels((prev) => [...prev, channel]);
-      setShowAdd(false);
-      setForm({ name: '', phone_number: '', phone_number_id: '', business_account_id: '', access_token: '' });
-      toast({ title: 'Channel connected' });
+      const res = await fetch(`${webhookUrl}?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(token)}&hub.challenge=ok`);
+      const text = await res.text();
+      if (res.ok && text === 'ok') {
+        toast({ title: 'Webhook reachable', description: 'Verification handshake succeeded.' });
+      } else {
+        toast({ title: 'Webhook test failed', description: `Got ${res.status}: ${text}`, variant: 'destructive' });
+      }
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    } finally {
-      setSaving(false);
+      toast({ title: 'Webhook test failed', description: err.message, variant: 'destructive' });
     }
   };
 
-  const webhookUrl = `${process.env.NEXT_PUBLIC_API_URL}/whatsapp/webhook`;
+  const copy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: `${label} copied` });
+  };
+
+  const webhookUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://whats-lark.vercel.app'}/api/webhooks/whatsapp`;
+  const canSave = form.name && form.phone_number && form.phone_number_id && form.business_account_id && form.access_token;
 
   return (
     <div>
       <Header
         title="WhatsApp Channels"
         subtitle="Connect your WhatsApp Business numbers"
-        actions={<Button size="sm" onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" />Add channel</Button>}
+        actions={<Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-2" />Add channel</Button>}
       />
 
       <div className="p-6">
@@ -60,11 +179,19 @@ export default function ChannelsPage() {
           <p className="text-sm font-medium text-blue-900 mb-1">Webhook URL for Meta</p>
           <div className="flex items-center gap-2">
             <code className="text-xs bg-white border border-blue-200 rounded px-2 py-1 flex-1 text-blue-800 truncate">{webhookUrl}</code>
-            <Button variant="outline" size="icon" className="h-7 w-7 border-blue-300" onClick={() => { navigator.clipboard.writeText(webhookUrl); toast({ title: 'Copied!' }); }}>
+            <Button variant="outline" size="icon" className="h-7 w-7 border-blue-300" onClick={() => copy(webhookUrl, 'Webhook URL')}>
               <Copy className="w-3.5 h-3.5" />
             </Button>
           </div>
-          <p className="text-xs text-blue-700 mt-1">Paste this URL in your Meta App &rarr; WhatsApp &rarr; Configuration &rarr; Webhook URL</p>
+          {verifyToken && (
+            <div className="flex items-center gap-2 mt-2">
+              <code className="text-xs bg-white border border-blue-200 rounded px-2 py-1 flex-1 text-blue-800 truncate">{verifyToken}</code>
+              <Button variant="outline" size="icon" className="h-7 w-7 border-blue-300" onClick={() => copy(verifyToken, 'Verify Token')}>
+                <Copy className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          )}
+          <p className="text-xs text-blue-700 mt-1">Paste the URL and verify token in Meta App &rarr; WhatsApp &rarr; Configuration &rarr; Webhook</p>
         </div>
 
         {loading ? (
@@ -76,7 +203,7 @@ export default function ChannelsPage() {
             <Phone className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="font-semibold">No channels connected</h3>
             <p className="text-sm text-muted-foreground mt-1 mb-4">Connect a WhatsApp Business number to start messaging.</p>
-            <Button onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" />Add channel</Button>
+            <Button onClick={openAdd}><Plus className="w-4 h-4 mr-2" />Add channel</Button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -105,9 +232,9 @@ export default function ChannelsPage() {
                         <Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>Test webhook</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive">Remove</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openEdit(channel)}>Edit</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleTestWebhook(channel)}>Test webhook</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleRemove(channel)}>Remove</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -121,7 +248,7 @@ export default function ChannelsPage() {
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Connect WhatsApp channel</DialogTitle>
+            <DialogTitle>{editTarget ? 'Edit WhatsApp channel' : 'Connect WhatsApp channel'}</DialogTitle>
             <DialogDescription>Enter the details from your Meta for Developers app</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -143,13 +270,31 @@ export default function ChannelsPage() {
             </div>
             <div className="space-y-2">
               <Label>Permanent Access Token *</Label>
-              <Input type="password" placeholder="EAAx…" value={form.access_token} onChange={(e) => setForm({ ...form, access_token: e.target.value })} />
+              <div className="relative">
+                <Input
+                  type={showToken ? 'text' : 'password'}
+                  placeholder="EAAx…"
+                  value={form.access_token}
+                  onChange={(e) => setForm({ ...form, access_token: e.target.value })}
+                  className="pr-9"
+                />
+                <button
+                  type="button"
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowToken(!showToken)}
+                >
+                  {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               <p className="text-xs text-muted-foreground">Generate a permanent token in Meta Business Manager. This is stored encrypted.</p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button onClick={handleAdd} disabled={saving || !form.name || !form.phone_number_id}>Connect channel</Button>
+            <Button onClick={handleSave} disabled={saving || !canSave}>
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              {editTarget ? 'Save changes' : 'Connect channel'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

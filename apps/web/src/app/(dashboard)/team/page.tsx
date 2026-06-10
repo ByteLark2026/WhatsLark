@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, MoreHorizontal, Mail } from 'lucide-react';
+import { Plus, MoreHorizontal, Mail, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Header } from '@/components/layout/header';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
 import { UserRole } from '@whatslark/shared';
 import type { CompanyUser } from '@whatslark/shared';
 import { getInitials, formatDate } from '@/lib/utils';
@@ -26,6 +27,7 @@ const roleBadge: Record<UserRole, any> = {
 
 export default function TeamPage() {
   const { toast } = useToast();
+  const { company } = useAuthStore();
   const [members, setMembers] = useState<CompanyUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
@@ -33,24 +35,63 @@ export default function TeamPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.get<CompanyUser[]>('/users')
-      .then(setMembers)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    if (!company?.id) { setLoading(false); return; }
+    const supabase = createClient();
+    (async () => {
+      const { data, error } = await supabase
+        .from('company_users')
+        .select('*, user:users(*)')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: true });
+      if (error) console.error(error);
+      if (data) setMembers(data as unknown as CompanyUser[]);
+      setLoading(false);
+    })();
+  }, [company?.id]);
 
   const handleInvite = async () => {
+    if (!company?.id) return;
     setSaving(true);
     try {
-      const member = await api.post<CompanyUser>('/users/invite', form);
-      setMembers((prev) => [...prev, member]);
+      const res = await fetch('/api/team/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, company_id: company.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Invite failed');
+      setMembers((prev) => [...prev, data as CompanyUser]);
       setShowInvite(false);
+      setForm({ email: '', full_name: '', role: UserRole.AGENT });
       toast({ title: 'Invitation sent', description: `Invite sent to ${form.email}` });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleChangeRole = async (member: CompanyUser, role: UserRole) => {
+    const supabase = createClient();
+    const { error } = await supabase.from('company_users').update({ role }).eq('id', member.id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setMembers((prev) => prev.map((m) => m.id === member.id ? { ...m, role } : m));
+    toast({ title: 'Role updated' });
+  };
+
+  const handleToggleActive = async (member: CompanyUser) => {
+    const supabase = createClient();
+    const next = !member.is_active;
+    const { error } = await supabase.from('company_users').update({ is_active: next }).eq('id', member.id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setMembers((prev) => prev.map((m) => m.id === member.id ? { ...m, is_active: next } : m));
+    toast({ title: next ? 'Member reactivated' : 'Member removed' });
   };
 
   return (
@@ -83,6 +124,8 @@ export default function TeamPage() {
                     ))}
                   </tr>
                 ))
+              ) : members.length === 0 ? (
+                <tr><td colSpan={6} className="text-center text-muted-foreground py-12">No team members yet</td></tr>
               ) : members.map((member) => (
                 <tr key={member.id} className="border-b hover:bg-muted/20">
                   <td className="px-4 py-3">
@@ -116,8 +159,19 @@ export default function TeamPage() {
                         <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>Change role</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive">Remove</DropdownMenuItem>
+                        {([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT] as UserRole[])
+                          .filter((r) => r !== member.role)
+                          .map((r) => (
+                            <DropdownMenuItem key={r} className="capitalize" onClick={() => handleChangeRole(member, r)}>
+                              Make {r}
+                            </DropdownMenuItem>
+                          ))}
+                        <DropdownMenuItem
+                          className={member.is_active ? 'text-destructive focus:text-destructive' : ''}
+                          onClick={() => handleToggleActive(member)}
+                        >
+                          {member.is_active ? 'Remove' : 'Reactivate'}
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>
@@ -154,7 +208,10 @@ export default function TeamPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowInvite(false)}>Cancel</Button>
-            <Button onClick={handleInvite} disabled={saving || !form.email}>Send invite</Button>
+            <Button onClick={handleInvite} disabled={saving || !form.email}>
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Send invite
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
