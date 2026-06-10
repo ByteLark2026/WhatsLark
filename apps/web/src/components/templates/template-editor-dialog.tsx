@@ -12,6 +12,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
+import { useToast } from '@/hooks/use-toast';
 import type { MessageTemplate, TemplateComponent, TemplateButton } from '@whatslark/shared';
 
 export type TemplateType =
@@ -352,21 +355,71 @@ function ButtonsEditor({
   );
 }
 
+const ACCEPT_BY_FORMAT: Record<string, string> = {
+  IMAGE: 'image/*',
+  VIDEO: 'video/*',
+  DOCUMENT: '.pdf,.doc,.docx',
+};
+
+function MediaUploadField({ format, value, onChange }: { format: string; value: string; onChange: (url: string) => void }) {
+  const { company } = useAuthStore();
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
+
+  const fileName = value ? decodeURIComponent(value.split('/').pop() || '') : 'No file chosen';
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !company?.id) return;
+    setUploading(true);
+    try {
+      const supabase = createClient();
+      const path = `${company.id}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
+      const { error } = await supabase.storage.from('template-media').upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data } = supabase.storage.from('template-media').getPublicUrl(path);
+      onChange(data.publicUrl);
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs font-normal text-muted-foreground">Upload Sample Media</Label>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" asChild disabled={uploading}>
+          <label className="cursor-pointer">
+            {uploading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : null}
+            Choose File
+            <input type="file" className="hidden" accept={ACCEPT_BY_FORMAT[format]} onChange={handleFile} disabled={uploading} />
+          </label>
+        </Button>
+        <span className="text-xs text-muted-foreground truncate">{fileName}</span>
+      </div>
+      <p className="text-xs text-muted-foreground">Required for Meta template review</p>
+    </div>
+  );
+}
+
 function CardEditor({ card, onChange, onRemove, productMode }: { card: CardForm; onChange: (c: CardForm) => void; onRemove: () => void; productMode: boolean }) {
   return (
     <div className="rounded-lg border p-3 space-y-3 bg-muted/20">
-      <div className="flex items-center justify-between">
-        <div className="grid grid-cols-2 gap-2 flex-1">
-          <Select value={card.headerFormat} onValueChange={(v) => onChange({ ...card, headerFormat: v as 'IMAGE' | 'VIDEO' })}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 space-y-2">
+          <Select value={card.headerFormat} onValueChange={(v) => onChange({ ...card, headerFormat: v as 'IMAGE' | 'VIDEO', headerMediaUrl: '' })}>
             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="IMAGE" className="text-xs">Image header</SelectItem>
               <SelectItem value="VIDEO" className="text-xs">Video header</SelectItem>
             </SelectContent>
           </Select>
-          <Input className="h-8 text-xs" placeholder="Media URL" value={card.headerMediaUrl} onChange={(e) => onChange({ ...card, headerMediaUrl: e.target.value })} />
+          <MediaUploadField format={card.headerFormat} value={card.headerMediaUrl} onChange={(url) => onChange({ ...card, headerMediaUrl: url })} />
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 ml-2" onClick={onRemove}>
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onRemove}>
           <Trash2 className="w-3.5 h-3.5 text-destructive" />
         </Button>
       </div>
@@ -598,7 +651,7 @@ export function TemplateEditorDialog({ open, onOpenChange, mode, initial, saving
                   <Input placeholder="Header text (max 60 chars)" maxLength={60} value={form.headerText} onChange={(e) => set('headerText', e.target.value)} />
                 )}
                 {(form.headerFormat === 'IMAGE' || form.headerFormat === 'VIDEO' || form.headerFormat === 'DOCUMENT') && (
-                  <Input placeholder="Media URL (sample for review)" value={form.headerMediaUrl} onChange={(e) => set('headerMediaUrl', e.target.value)} />
+                  <MediaUploadField format={form.headerFormat} value={form.headerMediaUrl} onChange={(url) => set('headerMediaUrl', url)} />
                 )}
               </div>
             )}
