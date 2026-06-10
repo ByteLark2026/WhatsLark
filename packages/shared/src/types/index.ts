@@ -228,6 +228,7 @@ export interface Campaign extends BaseEntity {
   failed_count: number;
   replied_count: number;
   template?: MessageTemplate;
+  channel?: WhatsAppChannel;
 }
 
 // ----- Message Template -----

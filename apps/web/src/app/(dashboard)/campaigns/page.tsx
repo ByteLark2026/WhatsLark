@@ -41,6 +41,12 @@ interface Stats {
   failed: number;
 }
 
+function toDatetimeLocalValue(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function CampaignsPage() {
   const { toast } = useToast();
   const { company, user } = useAuthStore();
@@ -59,6 +65,8 @@ export default function CampaignsPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<MessageTemplate | null>(null);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editTarget, setEditTarget] = useState<Campaign | null>(null);
+  const [viewTarget, setViewTarget] = useState<Campaign | null>(null);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -72,7 +80,7 @@ export default function CampaignsPage() {
     (async () => {
       const { data } = await supabase
         .from('campaigns')
-        .select('*')
+        .select('*, template:message_templates(name, category, language), channel:whatsapp_channels(name, phone_number)')
         .eq('company_id', company.id)
         .order('created_at', { ascending: false });
       if (data) {
@@ -112,42 +120,116 @@ export default function CampaignsPage() {
     }
   };
 
-  const handleCreate = async () => {
+  const closeCreateDialog = () => {
+    setShowCreate(false);
+    setEditTarget(null);
+    setForm({ name: '', description: '', scheduled_at: '', auto_retry: false });
+    setSelectedContacts([]);
+    setSelectedTemplate(null);
+    setChannelId('');
+  };
+
+  const openEditDialog = async (campaign: Campaign) => {
+    setEditTarget(campaign);
+    setForm({
+      name: campaign.name,
+      description: '',
+      scheduled_at: campaign.scheduled_at ? toDatetimeLocalValue(campaign.scheduled_at) : '',
+      auto_retry: false,
+    });
+    setShowCreate(true);
+    if (!company?.id) return;
+    const supabase = createClient();
+    const [tplRes, chRes] = await Promise.all([
+      supabase.from('message_templates').select('*').eq('company_id', company.id).eq('status', 'approved'),
+      supabase.from('whatsapp_channels').select('id, name, phone_number').eq('company_id', company.id).eq('is_active', true),
+    ]);
+    if (tplRes.data) {
+      const tpls = tplRes.data as unknown as MessageTemplate[];
+      setTemplates(tpls);
+      setSelectedTemplate(tpls.find((t) => t.id === campaign.template_id) || null);
+    }
+    if (chRes.data) setChannels(chRes.data as unknown as WhatsAppChannel[]);
+    setChannelId(campaign.channel_id);
+  };
+
+  const handleSave = async () => {
     if (!company?.id || !user?.id || !form.name || !selectedTemplate || !channelId) return;
     setCreating(true);
     const supabase = createClient();
-    const { data, error } = await supabase
-      .from('campaigns')
-      .insert({
-        company_id: company.id,
-        channel_id: channelId,
-        created_by: user.id,
-        name: form.name,
-        status: 'draft',
-        template_id: selectedTemplate.id,
-        total_recipients: selectedContacts.length,
-        sent_count: 0,
-        delivered_count: 0,
-        read_count: 0,
-        failed_count: 0,
-        replied_count: 0,
-        scheduled_at: form.scheduled_at || null,
-      })
-      .select()
-      .single();
+    if (editTarget) {
+      const { data, error } = await supabase
+        .from('campaigns')
+        .update({
+          name: form.name,
+          template_id: selectedTemplate.id,
+          channel_id: channelId,
+          scheduled_at: form.scheduled_at || null,
+        })
+        .eq('id', editTarget.id)
+        .select('*, template:message_templates(name, category, language), channel:whatsapp_channels(name, phone_number)')
+        .single();
+      if (error) {
+        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      } else {
+        setCampaigns((prev) => prev.map((c) => (c.id === editTarget.id ? (data as unknown as Campaign) : c)));
+        closeCreateDialog();
+        toast({ title: 'Campaign updated' });
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('campaigns')
+        .insert({
+          company_id: company.id,
+          channel_id: channelId,
+          created_by: user.id,
+          name: form.name,
+          status: 'draft',
+          template_id: selectedTemplate.id,
+          total_recipients: selectedContacts.length,
+          sent_count: 0,
+          delivered_count: 0,
+          read_count: 0,
+          failed_count: 0,
+          replied_count: 0,
+          scheduled_at: form.scheduled_at || null,
+        })
+        .select()
+        .single();
+      if (error) {
+        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      } else {
+        setCampaigns((prev) => [data as unknown as Campaign, ...prev]);
+        setStats((s) => ({ ...s, total: s.total + 1, recipients: s.recipients + selectedContacts.length }));
+        closeCreateDialog();
+        toast({ title: 'Campaign created', description: 'Campaign saved as draft.' });
+      }
+    }
+    setCreating(false);
+  };
+
+  const handleStatusChange = async (campaign: Campaign, status: CampaignStatus) => {
+    const supabase = createClient();
+    const { error } = await supabase.from('campaigns').update({ status }).eq('id', campaign.id);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
-      setCampaigns((prev) => [data as unknown as Campaign, ...prev]);
-      setStats((s) => ({ ...s, total: s.total + 1, recipients: s.recipients + selectedContacts.length }));
-      setShowCreate(false);
-      setForm({ name: '', description: '', scheduled_at: '', auto_retry: false });
-      setSelectedContacts([]);
-      setSelectedTemplate(null);
-      setChannelId('');
-      toast({ title: 'Campaign created', description: 'Campaign saved as draft.' });
+      setCampaigns((prev) => prev.map((c) => (c.id === campaign.id ? { ...c, status } : c)));
+      toast({ title: status === 'paused' ? 'Campaign paused' : 'Campaign resumed' });
     }
-    setCreating(false);
+  };
+
+  const handleDelete = async (campaign: Campaign) => {
+    if (!confirm(`Delete campaign "${campaign.name}"? This cannot be undone.`)) return;
+    const supabase = createClient();
+    const { error } = await supabase.from('campaigns').delete().eq('id', campaign.id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      setCampaigns((prev) => prev.filter((c) => c.id !== campaign.id));
+      setStats((s) => ({ ...s, total: Math.max(0, s.total - 1), recipients: Math.max(0, s.recipients - (campaign.total_recipients || 0)) }));
+      toast({ title: 'Campaign deleted' });
+    }
   };
 
   const filteredContacts = contacts.filter((c) => {
@@ -274,10 +356,17 @@ export default function CampaignsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>View details</DropdownMenuItem>
-                            {campaign.status === 'draft' && <DropdownMenuItem>Edit</DropdownMenuItem>}
-                            {campaign.status === 'running' && <DropdownMenuItem>Pause</DropdownMenuItem>}
-                            <DropdownMenuItem className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setViewTarget(campaign)}>View details</DropdownMenuItem>
+                            {campaign.status === 'draft' && (
+                              <DropdownMenuItem onClick={() => openEditDialog(campaign)}>Edit</DropdownMenuItem>
+                            )}
+                            {campaign.status === 'running' && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(campaign, CampaignStatus.PAUSED)}>Pause</DropdownMenuItem>
+                            )}
+                            {campaign.status === 'paused' && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(campaign, CampaignStatus.RUNNING)}>Resume</DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(campaign)}>Delete</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -294,11 +383,13 @@ export default function CampaignsPage() {
       </div>
 
       {/* Create Campaign Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={(open) => (open ? setShowCreate(true) : closeCreateDialog())}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create New Campaign</DialogTitle>
-            <p className="text-sm text-muted-foreground">Choose your campaign type and configure the details</p>
+            <DialogTitle>{editTarget ? 'Edit Campaign' : 'Create New Campaign'}</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {editTarget ? 'Update your campaign details' : 'Choose your campaign type and configure the details'}
+            </p>
           </DialogHeader>
 
           <Tabs defaultValue="contacts">
@@ -306,9 +397,11 @@ export default function CampaignsPage() {
               <TabsTrigger value="contacts" className="flex-1">
                 <Users className="w-4 h-4 mr-2" />Contacts Import
               </TabsTrigger>
-              <TabsTrigger value="csv" className="flex-1">
-                <Upload className="w-4 h-4 mr-2" />CSV Import
-              </TabsTrigger>
+              {!editTarget && (
+                <TabsTrigger value="csv" className="flex-1">
+                  <Upload className="w-4 h-4 mr-2" />CSV Import
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="contacts" className="space-y-4 mt-4">
@@ -407,74 +500,137 @@ export default function CampaignsPage() {
               </div>
 
               {/* Contact Selection */}
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    className="pl-9"
-                    placeholder="Search contacts..."
-                    value={contactSearch}
-                    onChange={(e) => setContactSearch(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm">Select Contacts</Label>
-                  <button
-                    type="button"
-                    className="text-xs text-primary underline"
-                    onClick={selectAll}
-                  >
-                    {selectedContacts.length === filteredContacts.length && filteredContacts.length > 0
-                      ? 'Deselect All'
-                      : `Select All (${filteredContacts.length})`}
-                  </button>
-                </div>
-                <div className="border rounded-lg max-h-48 overflow-y-auto divide-y">
-                  {filteredContacts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">No contacts found</p>
-                  ) : (
-                    filteredContacts.map((contact) => (
-                      <label
-                        key={contact.id}
-                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/30 cursor-pointer"
-                      >
-                        <Checkbox
-                          checked={selectedContacts.includes(contact.id)}
-                          onCheckedChange={() => toggleContact(contact.id)}
-                        />
-                        <div>
-                          <p className="text-sm font-medium">{contact.name || contact.phone}</p>
-                          {contact.name && <p className="text-xs text-muted-foreground">{contact.phone}</p>}
-                        </div>
-                      </label>
-                    ))
+              {!editTarget && (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      className="pl-9"
+                      placeholder="Search contacts..."
+                      value={contactSearch}
+                      onChange={(e) => setContactSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Select Contacts</Label>
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline"
+                      onClick={selectAll}
+                    >
+                      {selectedContacts.length === filteredContacts.length && filteredContacts.length > 0
+                        ? 'Deselect All'
+                        : `Select All (${filteredContacts.length})`}
+                    </button>
+                  </div>
+                  <div className="border rounded-lg max-h-48 overflow-y-auto divide-y">
+                    {filteredContacts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">No contacts found</p>
+                    ) : (
+                      filteredContacts.map((contact) => (
+                        <label
+                          key={contact.id}
+                          className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/30 cursor-pointer"
+                        >
+                          <Checkbox
+                            checked={selectedContacts.includes(contact.id)}
+                            onCheckedChange={() => toggleContact(contact.id)}
+                          />
+                          <div>
+                            <p className="text-sm font-medium">{contact.name || contact.phone}</p>
+                            {contact.name && <p className="text-xs text-muted-foreground">{contact.phone}</p>}
+                          </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  {selectedContacts.length > 0 && (
+                    <p className="text-xs text-muted-foreground">{selectedContacts.length} contact{selectedContacts.length !== 1 ? 's' : ''} selected</p>
                   )}
                 </div>
-                {selectedContacts.length > 0 && (
-                  <p className="text-xs text-muted-foreground">{selectedContacts.length} contact{selectedContacts.length !== 1 ? 's' : ''} selected</p>
-                )}
-              </div>
+              )}
             </TabsContent>
 
-            <TabsContent value="csv" className="mt-4">
-              <div className="border-2 border-dashed rounded-lg p-12 text-center space-y-3">
-                <Upload className="w-10 h-10 text-muted-foreground mx-auto" />
-                <p className="font-medium">Upload a CSV file</p>
-                <p className="text-sm text-muted-foreground">CSV must have columns: phone, name (optional)</p>
-                <Button variant="outline">Choose file</Button>
-              </div>
-            </TabsContent>
+            {!editTarget && (
+              <TabsContent value="csv" className="mt-4">
+                <div className="border-2 border-dashed rounded-lg p-12 text-center space-y-3">
+                  <Upload className="w-10 h-10 text-muted-foreground mx-auto" />
+                  <p className="font-medium">Upload a CSV file</p>
+                  <p className="text-sm text-muted-foreground">CSV must have columns: phone, name (optional)</p>
+                  <Button variant="outline">Choose file</Button>
+                </div>
+              </TabsContent>
+            )}
           </Tabs>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button variant="outline" onClick={closeCreateDialog}>Cancel</Button>
             <Button
-              onClick={handleCreate}
+              onClick={handleSave}
               disabled={creating || !form.name || !selectedTemplate || !channelId}
             >
               {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Start Campaign
+              {editTarget ? 'Save Changes' : 'Start Campaign'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Details Dialog */}
+      <Dialog open={!!viewTarget} onOpenChange={(open) => !open && setViewTarget(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{viewTarget?.name}</DialogTitle>
+          </DialogHeader>
+          {viewTarget && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge variant={statusBadge[viewTarget.status].variant}>{statusBadge[viewTarget.status].label}</Badge>
+                <span className="text-xs text-muted-foreground">Created {formatDate(viewTarget.created_at)}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground text-xs">Template</p>
+                  <p className="font-medium">{viewTarget.template?.name || '—'}</p>
+                  {viewTarget.template && (
+                    <p className="text-xs text-muted-foreground">{viewTarget.template.category} · {viewTarget.template.language?.toUpperCase()}</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Channel</p>
+                  <p className="font-medium">{viewTarget.channel?.name || '—'}</p>
+                  {viewTarget.channel && (
+                    <p className="text-xs text-muted-foreground">{viewTarget.channel.phone_number}</p>
+                  )}
+                </div>
+                {viewTarget.scheduled_at && (
+                  <div>
+                    <p className="text-muted-foreground text-xs">Scheduled</p>
+                    <p className="font-medium">{formatDate(viewTarget.scheduled_at, { dateStyle: 'medium', timeStyle: 'short' } as any)}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="border rounded-lg divide-y">
+                {[
+                  { label: 'Recipients', value: viewTarget.total_recipients },
+                  { label: 'Sent', value: viewTarget.sent_count },
+                  { label: 'Delivered', value: viewTarget.delivered_count },
+                  { label: 'Read', value: viewTarget.read_count },
+                  { label: 'Replied', value: viewTarget.replied_count },
+                  { label: 'Failed', value: viewTarget.failed_count },
+                ].map((row) => (
+                  <div key={row.label} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="text-muted-foreground">{row.label}</span>
+                    <span className="font-medium">{row.value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewTarget(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
