@@ -104,8 +104,7 @@ async function transformComponent(component: TemplateComponent, channel: Channel
 
     case 'CAROUSEL':
       out.cards = await Promise.all(
-        (component.cards || []).map(async (card, index) => ({
-          card_index: index,
+        (component.cards || []).map(async (card) => ({
           components: await Promise.all(card.components.map((c) => transformComponent(c, channel))),
         })),
       );
