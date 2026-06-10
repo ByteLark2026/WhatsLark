@@ -16,13 +16,13 @@ import { TemplateEditorDialog } from '@/components/templates/template-editor-dia
 
 const statusIcon = {
   pending: <Clock className="w-3.5 h-3.5 text-yellow-600" />,
-  approved: <CheckCircle className="w-3.5 h-3.5 text-green-600" />,
+  approved: <CheckCircle className="w-3.5 h-3.5 text-black" />,
   rejected: <XCircle className="w-3.5 h-3.5 text-red-600" />,
 };
 
 const statusVariant: Record<TemplateStatus, any> = {
   pending: 'warning',
-  approved: 'success',
+  approved: 'mono',
   rejected: 'destructive',
 };
 
