@@ -54,7 +54,7 @@ export default function SettingsPage() {
   const [form, setForm] = useState(BLANK);
   const [showToken, setShowToken] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [verifyToken] = useState(() => crypto.randomUUID().replace(/-/g, '').slice(0, 24));
+  const [verifyToken, setVerifyToken] = useState<string>('');
 
   useEffect(() => {
     if (!company?.id) { setLoadingChannels(false); return; }
@@ -66,6 +66,27 @@ export default function SettingsPage() {
         .order('created_at', { ascending: false });
       if (data) setChannels(data as Channel[]);
       setLoadingChannels(false);
+    })();
+
+    // Ensure the company has a persistent webhook verify token so Meta
+    // can verify the webhook BEFORE any channel is connected.
+    (async () => {
+      const { data: companyRow } = await supabase
+        .from('companies')
+        .select('webhook_verify_token')
+        .eq('id', company.id)
+        .single();
+
+      if (companyRow?.webhook_verify_token) {
+        setVerifyToken(companyRow.webhook_verify_token);
+      } else {
+        const newToken = crypto.randomUUID().replace(/-/g, '').slice(0, 24);
+        const { error } = await supabase
+          .from('companies')
+          .update({ webhook_verify_token: newToken })
+          .eq('id', company.id);
+        if (!error) setVerifyToken(newToken);
+      }
     })();
   }, [company?.id]);
 

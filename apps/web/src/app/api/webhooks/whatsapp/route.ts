@@ -14,14 +14,23 @@ export async function GET(req: NextRequest) {
   const challenge = searchParams.get('hub.challenge');
 
   if (mode === 'subscribe' && token) {
-    // Verify token must match one of our channel's webhook_verify_token
-    const { data } = await adminSupabase
+    // Verify token must match a company-level token (set before any channel
+    // exists) or a per-channel webhook_verify_token (legacy).
+    const { data: companyMatch } = await adminSupabase
+      .from('companies')
+      .select('id')
+      .eq('webhook_verify_token', token)
+      .maybeSingle();
+
+    if (companyMatch) return new NextResponse(challenge, { status: 200 });
+
+    const { data: channelMatch } = await adminSupabase
       .from('whatsapp_channels')
       .select('id')
       .eq('webhook_verify_token', token)
-      .single();
+      .maybeSingle();
 
-    if (data) return new NextResponse(challenge, { status: 200 });
+    if (channelMatch) return new NextResponse(challenge, { status: 200 });
   }
   return new NextResponse('Forbidden', { status: 403 });
 }
