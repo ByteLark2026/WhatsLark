@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 
 type WhatsAppChannel = BaseWhatsAppChannel & { access_token: string };
 
-const BLANK = { name: '', phone_number: '', phone_number_id: '', business_account_id: '', access_token: '' };
+const BLANK = { name: '', phone_number: '', phone_number_id: '', business_account_id: '', access_token: '', meta_app_id: '' };
 
 export default function ChannelsPage() {
   const { toast } = useToast();
@@ -78,6 +78,7 @@ export default function ChannelsPage() {
       phone_number_id: ch.phone_number_id,
       business_account_id: ch.business_account_id,
       access_token: ch.access_token,
+      meta_app_id: ch.meta_app_id || '',
     });
     setShowAdd(true);
   };
@@ -96,6 +97,7 @@ export default function ChannelsPage() {
           phone_number_id: form.phone_number_id,
           business_account_id: form.business_account_id,
           access_token: form.access_token,
+          meta_app_id: form.meta_app_id || null,
         })
         .eq('id', editTarget.id)
         .select()
@@ -117,6 +119,7 @@ export default function ChannelsPage() {
           phone_number_id: form.phone_number_id,
           business_account_id: form.business_account_id,
           access_token: form.access_token,
+          meta_app_id: form.meta_app_id || null,
           webhook_verify_token: verifyToken,
           is_active: true,
         })
@@ -287,6 +290,11 @@ export default function ChannelsPage() {
                 </button>
               </div>
               <p className="text-xs text-muted-foreground">Generate a permanent token in Meta Business Manager. This is stored encrypted.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Meta App ID</Label>
+              <Input placeholder="Optional — from Meta App → Settings → Basic" value={form.meta_app_id} onChange={(e) => setForm({ ...form, meta_app_id: e.target.value })} />
+              <p className="text-xs text-muted-foreground">Required to upload sample media when submitting templates with image/video/document headers for review.</p>
             </div>
           </div>
           <DialogFooter>

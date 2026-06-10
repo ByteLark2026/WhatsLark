@@ -45,6 +45,12 @@ export async function POST(req: NextRequest) {
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
           const value = change.value;
+
+          if (change.field === 'message_template_status_update') {
+            await handleTemplateStatusUpdate(value, entry.id);
+            continue;
+          }
+
           if (!value?.messages) continue;
 
           const phoneNumberId = value.metadata?.phone_number_id;
@@ -107,6 +113,53 @@ export async function POST(req: NextRequest) {
     console.error('[webhook/whatsapp]', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
+}
+
+function mapMetaStatus(status?: string): 'pending' | 'approved' | 'rejected' {
+  switch ((status || '').toUpperCase()) {
+    case 'APPROVED':
+      return 'approved';
+    case 'REJECTED':
+    case 'DISABLED':
+    case 'PAUSED':
+      return 'rejected';
+    default:
+      return 'pending';
+  }
+}
+
+async function handleTemplateStatusUpdate(value: any, wabaId?: string) {
+  const templateId = value?.message_template_id?.toString();
+  const name = value?.message_template_name;
+  const language = value?.message_template_language;
+  const status = mapMetaStatus(value?.event);
+  if (!templateId || !name) return;
+
+  // Find the company via the channel's business_account_id (fall back to matching by name/language across all companies if WABA id is missing).
+  let companyIds: string[] | null = null;
+  if (wabaId) {
+    const { data: channels } = await adminSupabase
+      .from('whatsapp_channels')
+      .select('company_id')
+      .eq('business_account_id', wabaId);
+    companyIds = (channels || []).map((c) => c.company_id);
+  }
+
+  // Try matching by wa_template_id first.
+  let query = adminSupabase.from('message_templates').update({ status }).eq('wa_template_id', templateId);
+  if (companyIds?.length) query = query.in('company_id', companyIds);
+  const { data: byId } = await query.select('id');
+
+  if (byId && byId.length > 0) return;
+
+  // Fall back to matching by name + language (template approved before wa_template_id was stored).
+  let fallback = adminSupabase
+    .from('message_templates')
+    .update({ status, wa_template_id: templateId })
+    .eq('name', name)
+    .eq('language', language);
+  if (companyIds?.length) fallback = fallback.in('company_id', companyIds);
+  await fallback;
 }
 
 async function upsertIncomingMessage(

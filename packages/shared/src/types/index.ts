@@ -139,6 +139,7 @@ export interface WhatsAppChannel extends BaseEntity {
   phone_number_id: string;
   business_account_id: string;
   webhook_verify_token: string;
+  meta_app_id?: string;
   is_active: boolean;
   // access_token is never sent to frontend
 }

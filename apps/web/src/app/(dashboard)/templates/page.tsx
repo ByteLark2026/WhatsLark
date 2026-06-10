@@ -34,6 +34,7 @@ export default function TemplatesPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<MessageTemplate | null>(null);
   const [saving, setSaving] = useState(false);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!company?.id) { setLoading(false); return; }
@@ -130,6 +131,29 @@ export default function TemplatesPage() {
     }
   };
 
+  const handleSubmitForReview = async (tpl: MessageTemplate) => {
+    if (!company?.id) return;
+    setSubmittingId(tpl.id);
+    try {
+      const res = await fetch('/api/templates/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_id: tpl.id, company_id: company.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: 'Submission failed', description: data.message, variant: 'destructive' });
+      } else {
+        setTemplates((prev) => prev.map((t) => t.id === tpl.id ? data as unknown as MessageTemplate : t));
+        toast({ title: 'Template submitted to Meta for review' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Submission failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
   const handleDelete = async (tpl: MessageTemplate) => {
     if (!confirm(`Delete template "${tpl.name}"? This cannot be undone.`)) return;
     const supabase = createClient();
@@ -183,6 +207,11 @@ export default function TemplatesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          {tpl.status === 'pending' && (
+                            <DropdownMenuItem disabled={submittingId === tpl.id} onClick={() => handleSubmitForReview(tpl)}>
+                              {submittingId === tpl.id ? 'Submitting…' : 'Submit for review'}
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => openEdit(tpl)}>Edit</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleDuplicate(tpl)}>Duplicate</DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(tpl)}>Delete</DropdownMenuItem>
