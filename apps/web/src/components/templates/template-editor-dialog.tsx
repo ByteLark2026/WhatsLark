@@ -448,14 +448,22 @@ function PreviewBubble({ form }: { form: TemplateFormState }) {
               <p className="font-bold text-sm">{previewText(form.headerText) || 'Header text'}</p>
             )}
             {form.headerFormat === 'IMAGE' && (
-              <div className="h-28 rounded-md bg-muted flex items-center justify-center">
-                <ImageIcon className="w-6 h-6 text-muted-foreground" />
-              </div>
+              form.headerMediaUrl ? (
+                <img src={form.headerMediaUrl} alt="Header" className="h-28 w-full rounded-md object-cover" />
+              ) : (
+                <div className="h-28 rounded-md bg-muted flex items-center justify-center">
+                  <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                </div>
+              )
             )}
             {form.headerFormat === 'VIDEO' && (
-              <div className="h-28 rounded-md bg-muted flex items-center justify-center">
-                <Video className="w-6 h-6 text-muted-foreground" />
-              </div>
+              form.headerMediaUrl ? (
+                <video src={form.headerMediaUrl} controls className="h-28 w-full rounded-md object-cover bg-black" />
+              ) : (
+                <div className="h-28 rounded-md bg-muted flex items-center justify-center">
+                  <Video className="w-6 h-6 text-muted-foreground" />
+                </div>
+              )
             )}
             {form.headerFormat === 'DOCUMENT' && (
               <div className="h-16 rounded-md bg-muted flex items-center gap-2 px-3">
@@ -508,9 +516,17 @@ function PreviewBubble({ form }: { form: TemplateFormState }) {
         <div className="flex gap-2 overflow-x-auto pb-1">
           {form.cards.map((card, i) => (
             <div key={i} className="bg-white rounded-lg shadow-sm p-2 w-40 shrink-0 space-y-1.5">
-              <div className="h-20 rounded-md bg-muted flex items-center justify-center">
-                {card.headerFormat === 'VIDEO' ? <Video className="w-5 h-5 text-muted-foreground" /> : <ImageIcon className="w-5 h-5 text-muted-foreground" />}
-              </div>
+              {card.headerMediaUrl ? (
+                card.headerFormat === 'VIDEO' ? (
+                  <video src={card.headerMediaUrl} controls className="h-20 w-full rounded-md object-cover bg-black" />
+                ) : (
+                  <img src={card.headerMediaUrl} alt="Card" className="h-20 w-full rounded-md object-cover" />
+                )
+              ) : (
+                <div className="h-20 rounded-md bg-muted flex items-center justify-center">
+                  {card.headerFormat === 'VIDEO' ? <Video className="w-5 h-5 text-muted-foreground" /> : <ImageIcon className="w-5 h-5 text-muted-foreground" />}
+                </div>
+              )}
               <p className="text-xs whitespace-pre-wrap line-clamp-3">{previewText(card.body) || 'Card body text'}</p>
               {card.buttons.filter((b) => b.text.trim()).map((b, bi) => (
                 <PreviewButton key={bi} icon={BUTTON_ICONS[b.type]} text={b.text} small />
