@@ -13,13 +13,14 @@ import {
   MessageSquare, HelpCircle, FileText, List, Image, MapPin,
   GitBranch, Clock, Variable, UserCheck, Webhook, BookOpen,
   XCircle, UserPlus, RefreshCw, ArrowLeft, Save, Plus, Loader2,
-  ChevronDown, Zap,
+  ChevronDown, Zap, Blocks, Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth';
 import { useToast } from '@/hooks/use-toast';
@@ -183,6 +184,8 @@ export default function FlowEditorPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node<FlowNodeData> | null>(null);
+  const [showPalette, setShowPalette] = useState(false);
+  const [showProperties, setShowProperties] = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<FlowNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -261,6 +264,7 @@ export default function FlowEditorPage() {
 
   const onNodeClick = useCallback((_: any, node: Node<FlowNodeData>) => {
     setSelectedNode(node);
+    if (window.innerWidth < 1024) setShowProperties(true);
   }, []);
 
   const onPaneClick = useCallback(() => {
@@ -289,45 +293,184 @@ export default function FlowEditorPage() {
     );
   }
 
+  const paletteContent = (
+    <>
+      <div className="p-3 border-b">
+        <p className="text-xs font-semibold text-muted-foreground">Flow Nodes</p>
+        <p className="text-xs text-muted-foreground">Click to add · hover ⓘ for help</p>
+      </div>
+      <div className="p-2 space-y-4 flex-1 overflow-y-auto">
+        {PALETTE_NODES.map((group) => (
+          <div key={group.category}>
+            <p className="text-xs font-semibold text-muted-foreground px-1 mb-2">{group.category}</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {group.nodes.map((node) => (
+                <button
+                  key={node.type}
+                  onClick={() => { addNode(node.type, node.label); setShowPalette(false); }}
+                  className="flex flex-col items-center gap-1.5 p-2 rounded-lg border hover:border-primary hover:bg-primary/5 transition-colors text-center"
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${node.color}`}>
+                    <node.icon className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-xs leading-tight">{node.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
+  const propertiesContent = (
+    <>
+      <div className="p-3 border-b flex items-center gap-2">
+        <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
+          <ChevronDown className="w-3.5 h-3.5 text-primary" />
+        </div>
+        <p className="text-xs font-semibold">Node Properties</p>
+      </div>
+      <div className="flex-1 p-3">
+        {!selectedNode ? (
+          <p className="text-xs text-muted-foreground mt-4 text-center">Click any node on the canvas to edit its settings</p>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-primary mb-2 capitalize">{selectedNode.data.type} Node</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Label</Label>
+              <Input
+                className="h-7 text-xs"
+                value={selectedNode.data.label}
+                onChange={(e) => {
+                  const label = e.target.value;
+                  setNodes((nds) => nds.map((n) => n.id === selectedNode.id ? { ...n, data: { ...n.data, label } } : n));
+                  setSelectedNode((prev) => prev ? { ...prev, data: { ...prev.data, label } } : prev);
+                }}
+              />
+            </div>
+            {selectedNode.data.type === 'sendMessage' && (
+              <div className="space-y-2">
+                <Label className="text-xs">Message</Label>
+                <Textarea
+                  className="text-xs resize-none"
+                  rows={4}
+                  placeholder="Type your message..."
+                  value={selectedNode.data.config?.message || ''}
+                  onChange={(e) => updateNodeConfig('message', e.target.value)}
+                />
+              </div>
+            )}
+            {selectedNode.data.type === 'askQuestion' && (
+              <div className="space-y-2">
+                <Label className="text-xs">Question</Label>
+                <Textarea
+                  className="text-xs resize-none"
+                  rows={3}
+                  placeholder="What do you want to ask?"
+                  value={selectedNode.data.config?.question || ''}
+                  onChange={(e) => updateNodeConfig('question', e.target.value)}
+                />
+                <Label className="text-xs">Save response to variable</Label>
+                <Input
+                  className="h-7 text-xs"
+                  placeholder="e.g. user_name"
+                  value={selectedNode.data.config?.variable || ''}
+                  onChange={(e) => updateNodeConfig('variable', e.target.value)}
+                />
+              </div>
+            )}
+            {selectedNode.data.type === 'delay' && (
+              <div className="space-y-2">
+                <Label className="text-xs">Duration</Label>
+                <Input
+                  className="h-7 text-xs"
+                  placeholder="e.g. 5 minutes"
+                  value={selectedNode.data.config?.duration || ''}
+                  onChange={(e) => updateNodeConfig('duration', e.target.value)}
+                />
+              </div>
+            )}
+            {selectedNode.data.type === 'condition' && (
+              <div className="space-y-2">
+                <Label className="text-xs">Condition</Label>
+                <Input
+                  className="h-7 text-xs"
+                  placeholder="e.g. message contains 'yes'"
+                  value={selectedNode.data.config?.condition || ''}
+                  onChange={(e) => updateNodeConfig('condition', e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Left handle = Yes, Right handle = No</p>
+              </div>
+            )}
+            {selectedNode.data.type === 'webhook' && (
+              <div className="space-y-2">
+                <Label className="text-xs">Webhook URL</Label>
+                <Input
+                  className="h-7 text-xs"
+                  placeholder="https://..."
+                  value={selectedNode.data.config?.url || ''}
+                  onChange={(e) => updateNodeConfig('url', e.target.value)}
+                />
+              </div>
+            )}
+            {selectedNode.data.type !== 'start' && selectedNode.data.type !== 'end' && (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-full text-xs h-7"
+                onClick={() => {
+                  setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
+                  setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
+                  setSelectedNode(null);
+                  setShowProperties(false);
+                }}
+              >
+                Delete Node
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Left: Node Palette */}
-      <div className="w-52 border-r bg-background flex flex-col overflow-y-auto">
-        <div className="p-3 border-b">
-          <p className="text-xs font-semibold text-muted-foreground">Flow Nodes</p>
-          <p className="text-xs text-muted-foreground">Click to add · hover ⓘ for help</p>
-        </div>
-        <div className="p-2 space-y-4 flex-1 overflow-y-auto">
-          {PALETTE_NODES.map((group) => (
-            <div key={group.category}>
-              <p className="text-xs font-semibold text-muted-foreground px-1 mb-2">{group.category}</p>
-              <div className="grid grid-cols-2 gap-1.5">
-                {group.nodes.map((node) => (
-                  <button
-                    key={node.type}
-                    onClick={() => addNode(node.type, node.label)}
-                    className="flex flex-col items-center gap-1.5 p-2 rounded-lg border hover:border-primary hover:bg-primary/5 transition-colors text-center"
-                  >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${node.color}`}>
-                      <node.icon className="w-4 h-4 text-white" />
-                    </div>
-                    <span className="text-xs leading-tight">{node.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Left: Node Palette (desktop) */}
+      <div className="hidden lg:flex w-52 border-r bg-background flex-col overflow-y-auto">
+        {paletteContent}
       </div>
 
+      {/* Left: Node Palette (mobile sheet) */}
+      <Sheet open={showPalette} onOpenChange={setShowPalette}>
+        <SheetContent side="left" className="w-64 max-w-[85vw] p-0 bg-background text-foreground flex flex-col">
+          <SheetTitle className="sr-only">Flow nodes</SheetTitle>
+          {paletteContent}
+        </SheetContent>
+      </Sheet>
+
+      {/* Right: Node Properties (mobile sheet) */}
+      <Sheet open={showProperties} onOpenChange={setShowProperties}>
+        <SheetContent side="right" className="w-64 max-w-[85vw] p-0 bg-background text-foreground flex flex-col">
+          <SheetTitle className="sr-only">Node properties</SheetTitle>
+          {propertiesContent}
+        </SheetContent>
+      </Sheet>
+
       {/* Center: Canvas */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-background">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2.5 border-b bg-background">
           <Button variant="ghost" size="icon" onClick={() => router.push('/automations')}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <div className="flex-1 min-w-0">
+          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setShowPalette(true)}>
+            <Blocks className="w-4 h-4" />
+          </Button>
+          <div className="flex-1 min-w-[120px]">
             <input
               className="font-semibold bg-transparent outline-none border-0 text-sm w-full"
               value={flowName}
@@ -341,9 +484,9 @@ export default function FlowEditorPage() {
               placeholder="Add a description..."
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Select value={trigger} onValueChange={setTrigger}>
-              <SelectTrigger className="h-8 text-xs w-48">
+              <SelectTrigger className="h-8 text-xs w-40 sm:w-48">
                 <Zap className="w-3 h-3 mr-1 text-yellow-500" />
                 <SelectValue />
               </SelectTrigger>
@@ -353,7 +496,7 @@ export default function FlowEditorPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={() => {
+            <Button variant="outline" size="sm" className="hidden sm:inline-flex" onClick={() => {
               setNodes([{
                 id: 'start',
                 type: 'start',
@@ -367,6 +510,9 @@ export default function FlowEditorPage() {
             <Button size="sm" onClick={handleSave} disabled={saving}>
               {saving ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Save className="w-4 h-4 mr-1.5" />}
               Save Flow
+            </Button>
+            <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setShowProperties(true)}>
+              <Settings2 className="w-4 h-4" />
             </Button>
           </div>
         </div>
@@ -389,7 +535,7 @@ export default function FlowEditorPage() {
             <Background color="#e2e8f0" gap={20} size={1} />
             <Controls className="!border-border !shadow-sm" />
             <MiniMap
-              className="!border-border !shadow-sm"
+              className="!border-border !shadow-sm hidden sm:block"
               nodeColor={(n) => {
                 if (n.type === 'start') return '#22c55e';
                 if (n.type === 'end') return '#ef4444';
@@ -400,116 +546,9 @@ export default function FlowEditorPage() {
         </div>
       </div>
 
-      {/* Right: Node Properties */}
-      <div className="w-64 border-l bg-background flex flex-col overflow-y-auto">
-        <div className="p-3 border-b flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
-            <ChevronDown className="w-3.5 h-3.5 text-primary" />
-          </div>
-          <p className="text-xs font-semibold">Node Properties</p>
-        </div>
-        <div className="flex-1 p-3">
-          {!selectedNode ? (
-            <p className="text-xs text-muted-foreground mt-4 text-center">Click any node on the canvas to edit its settings</p>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold text-primary mb-2 capitalize">{selectedNode.data.type} Node</p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Label</Label>
-                <Input
-                  className="h-7 text-xs"
-                  value={selectedNode.data.label}
-                  onChange={(e) => {
-                    const label = e.target.value;
-                    setNodes((nds) => nds.map((n) => n.id === selectedNode.id ? { ...n, data: { ...n.data, label } } : n));
-                    setSelectedNode((prev) => prev ? { ...prev, data: { ...prev.data, label } } : prev);
-                  }}
-                />
-              </div>
-              {selectedNode.data.type === 'sendMessage' && (
-                <div className="space-y-2">
-                  <Label className="text-xs">Message</Label>
-                  <Textarea
-                    className="text-xs resize-none"
-                    rows={4}
-                    placeholder="Type your message..."
-                    value={selectedNode.data.config?.message || ''}
-                    onChange={(e) => updateNodeConfig('message', e.target.value)}
-                  />
-                </div>
-              )}
-              {selectedNode.data.type === 'askQuestion' && (
-                <div className="space-y-2">
-                  <Label className="text-xs">Question</Label>
-                  <Textarea
-                    className="text-xs resize-none"
-                    rows={3}
-                    placeholder="What do you want to ask?"
-                    value={selectedNode.data.config?.question || ''}
-                    onChange={(e) => updateNodeConfig('question', e.target.value)}
-                  />
-                  <Label className="text-xs">Save response to variable</Label>
-                  <Input
-                    className="h-7 text-xs"
-                    placeholder="e.g. user_name"
-                    value={selectedNode.data.config?.variable || ''}
-                    onChange={(e) => updateNodeConfig('variable', e.target.value)}
-                  />
-                </div>
-              )}
-              {selectedNode.data.type === 'delay' && (
-                <div className="space-y-2">
-                  <Label className="text-xs">Duration</Label>
-                  <Input
-                    className="h-7 text-xs"
-                    placeholder="e.g. 5 minutes"
-                    value={selectedNode.data.config?.duration || ''}
-                    onChange={(e) => updateNodeConfig('duration', e.target.value)}
-                  />
-                </div>
-              )}
-              {selectedNode.data.type === 'condition' && (
-                <div className="space-y-2">
-                  <Label className="text-xs">Condition</Label>
-                  <Input
-                    className="h-7 text-xs"
-                    placeholder="e.g. message contains 'yes'"
-                    value={selectedNode.data.config?.condition || ''}
-                    onChange={(e) => updateNodeConfig('condition', e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">Left handle = Yes, Right handle = No</p>
-                </div>
-              )}
-              {selectedNode.data.type === 'webhook' && (
-                <div className="space-y-2">
-                  <Label className="text-xs">Webhook URL</Label>
-                  <Input
-                    className="h-7 text-xs"
-                    placeholder="https://..."
-                    value={selectedNode.data.config?.url || ''}
-                    onChange={(e) => updateNodeConfig('url', e.target.value)}
-                  />
-                </div>
-              )}
-              {selectedNode.data.type !== 'start' && selectedNode.data.type !== 'end' && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="w-full text-xs h-7"
-                  onClick={() => {
-                    setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
-                    setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
-                    setSelectedNode(null);
-                  }}
-                >
-                  Delete Node
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
+      {/* Right: Node Properties (desktop) */}
+      <div className="hidden lg:flex w-64 border-l bg-background flex-col overflow-y-auto">
+        {propertiesContent}
       </div>
     </div>
   );

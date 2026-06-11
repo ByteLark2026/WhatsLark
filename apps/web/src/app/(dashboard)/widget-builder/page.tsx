@@ -223,9 +223,9 @@ export default function WidgetBuilderPage() {
           }
         />
 
-        <div className="p-6 max-w-3xl">
+        <div className="p-4 sm:p-6 max-w-3xl">
           <Tabs defaultValue="content">
-            <TabsList className="mb-6">
+            <TabsList className="mb-6 w-full overflow-x-auto justify-start">
               <TabsTrigger value="content">Content</TabsTrigger>
               <TabsTrigger value="design">Design</TabsTrigger>
               <TabsTrigger value="layouts">Layouts</TabsTrigger>
@@ -331,7 +331,7 @@ export default function WidgetBuilderPage() {
                       ))}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Primary Color</Label>
                       <div className="flex items-center gap-2">
@@ -448,7 +448,7 @@ export default function WidgetBuilderPage() {
                 <p className="text-sm text-muted-foreground mb-4">Configure your support team</p>
                 <div className="space-y-3">
                   {config.team_members.map((member, i) => (
-                    <div key={i} className="flex items-center gap-3">
+                    <div key={i} className="flex flex-wrap sm:flex-nowrap items-center gap-3">
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
                         style={{ background: config.primary_color }}
@@ -463,6 +463,7 @@ export default function WidgetBuilderPage() {
                           updated[i] = { ...member, name: e.target.value };
                           set('team_members', updated);
                         }}
+                        className="flex-1 min-w-[100px]"
                       />
                       <Input
                         placeholder="Role"
@@ -472,6 +473,7 @@ export default function WidgetBuilderPage() {
                           updated[i] = { ...member, role: e.target.value };
                           set('team_members', updated);
                         }}
+                        className="flex-1 min-w-[100px]"
                       />
                       <Button
                         variant="ghost"
@@ -574,7 +576,7 @@ export default function WidgetBuilderPage() {
       </div>
 
       {/* Right panel: Live Preview */}
-      <div className="w-96 border-l bg-muted/20 flex flex-col overflow-hidden">
+      <div className="hidden xl:flex w-96 border-l bg-muted/20 flex-col overflow-hidden">
         <div className="px-4 py-3 border-b bg-background">
           <p className="font-semibold text-sm">Live Preview</p>
           <p className="text-xs text-muted-foreground">Interactive widget preview</p>

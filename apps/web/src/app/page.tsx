@@ -44,7 +44,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-white">
       {/* Nav */}
       <nav className="border-b sticky top-0 bg-white/95 backdrop-blur z-50">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <MessageSquare className="w-4 h-4 text-white" />
@@ -55,20 +55,25 @@ export default function HomePage() {
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
             <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/login"><Button variant="outline" size="sm">Sign in</Button></Link>
-            <Link href="/register"><Button size="sm">Start free trial</Button></Link>
+            <Link href="/register">
+              <Button size="sm">
+                <span className="hidden sm:inline">Start free trial</span>
+                <span className="sm:hidden">Sign up</span>
+              </Button>
+            </Link>
           </div>
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="pt-24 pb-20 px-6 text-center">
+      <section className="pt-16 sm:pt-24 pb-20 px-4 sm:px-6 text-center">
         <div className="max-w-4xl mx-auto">
           <Badge variant="secondary" className="mb-6 text-sm px-4 py-1.5">
             🚀 Now in beta — join 2,000+ businesses
           </Badge>
-          <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
             WhatsApp CRM for{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-[#0F6FFF]">
               Sales &amp; Support
@@ -90,7 +95,7 @@ export default function HomePage() {
       </section>
 
       {/* Features */}
-      <section id="features" className="py-20 px-6 bg-muted/30">
+      <section id="features" className="py-20 px-4 sm:px-6 bg-muted/30">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold mb-4">Everything you need to grow on WhatsApp</h2>
@@ -111,7 +116,7 @@ export default function HomePage() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="py-20 px-6">
+      <section id="pricing" className="py-20 px-4 sm:px-6">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold mb-4">Simple, transparent pricing</h2>
@@ -143,10 +148,10 @@ export default function HomePage() {
       </section>
 
       {/* CTA */}
-      <section className="py-20 px-6 bg-gradient-to-br from-[#0E1420] to-[#1a2a40] text-white">
+      <section className="py-20 px-4 sm:px-6 bg-gradient-to-br from-[#0E1420] to-[#1a2a40] text-white">
         <div className="max-w-3xl mx-auto text-center">
           <Globe className="w-12 h-12 text-primary mx-auto mb-6" />
-          <h2 className="text-4xl font-bold mb-4">Ready to supercharge your WhatsApp?</h2>
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">Ready to supercharge your WhatsApp?</h2>
           <p className="text-lg text-white/70 mb-8">Join thousands of businesses using WhatsLark to close more deals on WhatsApp.</p>
           <Link href="/register">
             <Button size="lg" className="px-10">Get started free <ArrowRight className="w-4 h-4 ml-2" /></Button>
@@ -155,7 +160,7 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t py-8 px-6">
+      <footer className="border-t py-8 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">

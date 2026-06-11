@@ -43,7 +43,7 @@ export default function AdminCompaniesPage() {
   const statusVariant = { active: 'success', suspended: 'destructive', trial: 'warning' } as any;
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Companies</h1>
@@ -56,8 +56,8 @@ export default function AdminCompaniesPage() {
         <Input className="pl-9" placeholder="Search companies…" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      <div className="rounded-lg border overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="rounded-lg border overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead>
             <tr className="border-b bg-muted/40">
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Company</th>

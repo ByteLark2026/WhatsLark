@@ -12,14 +12,14 @@ interface HeaderProps {
 
 export function Header({ title, subtitle, actions }: HeaderProps) {
   return (
-    <header className="flex items-center justify-between px-6 py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
-      <div>
-        <h1 className="text-xl font-semibold">{title}</h1>
-        {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
+      <div className="min-w-0">
+        <h1 className="text-lg sm:text-xl font-semibold truncate">{title}</h1>
+        {subtitle && <p className="text-sm text-muted-foreground truncate">{subtitle}</p>}
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
         {actions}
-        <Button variant="ghost" size="icon">
+        <Button variant="ghost" size="icon" className="hidden sm:inline-flex">
           <Bell className="w-4 h-4" />
         </Button>
       </div>

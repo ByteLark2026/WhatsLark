@@ -34,7 +34,7 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Admin Overview</h1>
         <p className="text-muted-foreground">Platform-wide statistics</p>

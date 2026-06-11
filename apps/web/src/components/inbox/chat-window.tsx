@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Send, MoreVertical, UserCheck, CheckCheck, Check, Clock, AlertCircle, StickyNote } from 'lucide-react';
+import { Send, MoreVertical, UserCheck, CheckCheck, Check, Clock, AlertCircle, StickyNote, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 interface Props {
   conversation: Conversation;
   onStatusChange: (id: string, status: Conversation['status']) => void;
+  onBack?: () => void;
 }
 
 const statusIcon: Record<MessageStatus, React.ReactNode> = {
@@ -26,7 +27,7 @@ const statusIcon: Record<MessageStatus, React.ReactNode> = {
   failed: <AlertCircle className="w-3 h-3 text-destructive" />,
 };
 
-export function ChatWindow({ conversation, onStatusChange }: Props) {
+export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
   const { toast } = useToast();
   const { user, company } = useAuthStore();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -109,19 +110,24 @@ export function ChatWindow({ conversation, onStatusChange }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full">
       <div className="flex items-center justify-between px-4 py-3 border-b">
-        <div className="flex items-center gap-3">
-          <Avatar className="w-9 h-9">
+        <div className="flex items-center gap-3 min-w-0">
+          {onBack && (
+            <Button variant="ghost" size="icon" className="sm:hidden -ml-2 flex-shrink-0" onClick={onBack}>
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+          )}
+          <Avatar className="w-9 h-9 flex-shrink-0">
             <AvatarImage src={contact?.avatar_url} />
             <AvatarFallback className="bg-primary/10 text-primary text-sm">{getInitials(name)}</AvatarFallback>
           </Avatar>
-          <div>
-            <p className="font-medium text-sm">{name}</p>
-            <p className="text-xs text-muted-foreground">{contact?.phone}</p>
+          <div className="min-w-0">
+            <p className="font-medium text-sm truncate">{name}</p>
+            <p className="text-xs text-muted-foreground truncate">{contact?.phone}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Badge variant={conversation.status === 'open' ? 'success' : conversation.status === 'pending' ? 'warning' : 'secondary'}>
             {conversation.status}
           </Badge>
@@ -169,7 +175,7 @@ export function ChatWindow({ conversation, onStatusChange }: Props) {
             <div key={msg.id} className={cn('flex', isOut ? 'justify-end' : 'justify-start')}>
               <div
                 className={cn(
-                  'max-w-[70%] px-3.5 py-2 rounded-2xl text-sm',
+                  'max-w-[85%] sm:max-w-[70%] px-3.5 py-2 rounded-2xl text-sm',
                   isNoteMsg
                     ? 'bg-yellow-50 border border-yellow-200 text-yellow-900'
                     : isOut

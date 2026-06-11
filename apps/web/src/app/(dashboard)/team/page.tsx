@@ -102,9 +102,9 @@ export default function TeamPage() {
         actions={<Button size="sm" onClick={() => setShowInvite(true)}><Plus className="w-4 h-4 mr-2" />Invite member</Button>}
       />
 
-      <div className="p-6">
-        <div className="rounded-lg border overflow-hidden">
-          <table className="w-full text-sm">
+      <div className="p-4 sm:p-6">
+        <div className="rounded-lg border overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b bg-muted/40">
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Member</th>

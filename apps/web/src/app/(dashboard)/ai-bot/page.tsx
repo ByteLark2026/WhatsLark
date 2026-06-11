@@ -65,7 +65,7 @@ export default function AiBotPage() {
     return (
       <div>
         <Header title="AI Bot" />
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           {[...Array(3)].map((_, i) => <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />)}
         </div>
       </div>
@@ -85,10 +85,10 @@ export default function AiBotPage() {
         }
       />
 
-      <div className="p-6 max-w-3xl space-y-6">
+      <div className="p-4 sm:p-6 max-w-3xl space-y-6">
         <Card>
           <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
                   <Bot className="w-5 h-5 text-purple-600" />

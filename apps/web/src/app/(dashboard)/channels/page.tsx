@@ -176,7 +176,7 @@ export default function ChannelsPage() {
         actions={<Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-2" />Add channel</Button>}
       />
 
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {/* Webhook info */}
         <div className="mb-6 p-4 rounded-lg bg-blue-50 border border-blue-200">
           <p className="text-sm font-medium text-blue-900 mb-1">Webhook URL for Meta</p>
@@ -212,19 +212,19 @@ export default function ChannelsPage() {
           <div className="space-y-3">
             {channels.map((channel) => (
               <Card key={channel.id}>
-                <CardContent className="p-4 flex items-center gap-4">
+                <CardContent className="p-4 flex flex-wrap sm:flex-nowrap items-center gap-4">
                   <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
                     <Phone className="w-5 h-5 text-green-600" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-[160px]">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold">{channel.name}</p>
                       <Badge variant={channel.is_active ? 'success' : 'secondary'}>
                         {channel.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{channel.phone_number}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">ID: {channel.phone_number_id}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">ID: {channel.phone_number_id}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {channel.is_active

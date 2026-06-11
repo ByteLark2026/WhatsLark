@@ -31,7 +31,7 @@ const navItems = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; className?: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, company, clearAuth } = useAuthStore();
@@ -44,7 +44,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex flex-col w-64 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
+    <aside className={cn('flex flex-col w-64 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border', className)}>
       {/* Logo */}
       <div className="flex items-center gap-2 px-6 py-5 border-b border-sidebar-border">
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
@@ -64,6 +64,7 @@ export function Sidebar() {
             <Link
               key={href}
               href={href}
+              onClick={onNavigate}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 active

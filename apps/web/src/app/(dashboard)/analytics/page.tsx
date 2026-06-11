@@ -118,9 +118,9 @@ export default function AnalyticsPage() {
         }
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Time range */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground mr-1">Time Range:</span>
           {(['7d', '30d', '3m'] as Range[]).map((r) => (
             <Button
@@ -135,7 +135,7 @@ export default function AnalyticsPage() {
         </div>
 
         <Tabs defaultValue="overview">
-          <TabsList>
+          <TabsList className="w-full sm:w-auto overflow-x-auto justify-start">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="messages">Messages</TabsTrigger>
             <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
@@ -143,7 +143,7 @@ export default function AnalyticsPage() {
 
           <TabsContent value="overview" className="space-y-6 mt-4">
             {/* Stats cards */}
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
               {[
                 { label: 'Total Messages', value: overview.total, sub: `Last ${RANGE_DAYS[range]} days`, icon: MessageSquare, color: 'text-blue-600' },
                 { label: 'Delivery Rate', value: `${overview.deliveryRate}%`, sub: '', icon: CheckCheck, color: 'text-green-600' },
@@ -172,9 +172,9 @@ export default function AnalyticsPage() {
               ))}
             </div>
 
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Chart */}
-              <Card className="col-span-2">
+              <Card className="lg:col-span-2">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Message Performance</CardTitle>
                 </CardHeader>
@@ -259,7 +259,7 @@ export default function AnalyticsPage() {
           </TabsContent>
 
           <TabsContent value="campaigns" className="mt-4 space-y-6">
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
                 { label: 'Total Campaigns', value: campaigns.length },
                 { label: 'Active', value: activeCampaigns },
@@ -285,8 +285,8 @@ export default function AnalyticsPage() {
               </div>
             ) : (
               <Card>
-                <CardContent className="p-0">
-                  <div className="divide-y">
+                <CardContent className="p-0 overflow-x-auto">
+                  <div className="divide-y min-w-[480px]">
                     <div className="grid grid-cols-5 gap-4 px-4 py-2 text-xs font-medium text-muted-foreground bg-muted/30">
                       <div className="col-span-2">Campaign</div>
                       <div>Recipients</div>

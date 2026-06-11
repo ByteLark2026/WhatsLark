@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Menu, MessageSquare } from 'lucide-react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Toaster } from '@/components/ui/toaster';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth';
 import { createClient } from '@/lib/supabase';
 
@@ -12,6 +14,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { user, setAuth } = useAuthStore();
   const [checking, setChecking] = useState(true);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -52,8 +55,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar />
+      <Sidebar className="hidden lg:flex" />
+
+      <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+        <SheetContent side="left" className="w-64 max-w-[85vw] p-0">
+          <SheetTitle className="sr-only">Navigation menu</SheetTitle>
+          <Sidebar className="flex border-r-0" onNavigate={() => setMobileNavOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mobile top bar */}
+        <header className="flex items-center gap-3 px-4 py-3 border-b border-border bg-background lg:hidden">
+          <Button variant="ghost" size="icon" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
+            <Menu className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-bold text-lg leading-none">WhatsLark</span>
+          </div>
+        </header>
+
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
       <Toaster />

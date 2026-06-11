@@ -9,6 +9,7 @@ import { ConversationList } from '@/components/inbox/conversation-list';
 import { ChatWindow } from '@/components/inbox/chat-window';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth';
+import { cn } from '@/lib/utils';
 import { ConversationStatus } from '@whatslark/shared';
 import type { Conversation } from '@whatslark/shared';
 
@@ -76,8 +77,8 @@ export default function InboxPage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <div className="w-80 flex flex-col border-r bg-background">
+    <div className="flex h-full overflow-hidden">
+      <div className={cn('w-full sm:w-80 flex-col border-r bg-background', selected ? 'hidden sm:flex' : 'flex')}>
         <div className="p-4 border-b space-y-3">
           <h1 className="text-lg font-semibold">Inbox</h1>
           <div className="relative">
@@ -110,11 +111,11 @@ export default function InboxPage() {
         />
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className={cn('flex-1 overflow-hidden', selected ? 'flex' : 'hidden sm:flex')}>
         {selected ? (
-          <ChatWindow conversation={selected} onStatusChange={handleStatusChange} />
+          <ChatWindow conversation={selected} onStatusChange={handleStatusChange} onBack={() => setSelected(null)} />
         ) : (
-          <div className="h-full flex items-center justify-center text-center">
+          <div className="h-full flex items-center justify-center text-center w-full">
             <div>
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <Search className="w-8 h-8 text-muted-foreground" />

@@ -93,7 +93,7 @@ export default function NewCampaignPage() {
         }
       />
 
-      <div className="p-6 max-w-2xl">
+      <div className="p-4 sm:p-6 max-w-2xl">
         {loadingData ? (
           <div className="space-y-4">
             {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />)}

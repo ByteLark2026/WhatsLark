@@ -109,13 +109,13 @@ export default function LeadsPage() {
         actions={<Button size="sm" onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" />Add lead</Button>}
       />
 
-      <div className="flex-1 overflow-x-auto p-6">
+      <div className="flex-1 overflow-x-auto p-4 sm:p-6">
         <div className="flex gap-4 min-w-max h-full">
           {STAGES.map(({ stage, label, color, bg }) => {
             const stageLeads = byStage(stage);
             const totalValue = stageLeads.reduce((acc, l) => acc + (l.deal_value || 0), 0);
             return (
-              <div key={stage} className="w-72 flex flex-col gap-2">
+              <div key={stage} className="w-64 sm:w-72 flex flex-col gap-2">
                 <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${bg}`}>
                   <span className={`text-sm font-semibold ${color}`}>{label}</span>
                   <div className="flex items-center gap-2">

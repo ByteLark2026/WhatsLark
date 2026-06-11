@@ -159,9 +159,9 @@ export default function SettingsPage() {
   return (
     <div>
       <Header title="Settings" subtitle="Manage your profile, workspace, and integrations" />
-      <div className="p-6 max-w-3xl">
+      <div className="p-4 sm:p-6 max-w-3xl">
         <Tabs defaultValue="profile">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 w-full sm:w-auto overflow-x-auto justify-start">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="workspace">Workspace</TabsTrigger>
             <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
@@ -285,12 +285,12 @@ export default function SettingsPage() {
 
             {/* Connected numbers */}
             <Card>
-              <CardHeader className="flex-row items-center justify-between pb-3">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
                 <div>
                   <CardTitle className="flex items-center gap-2"><MessageSquare className="w-4 h-4" />Connected Numbers</CardTitle>
                   <CardDescription className="text-xs mt-0.5">WhatsApp Business numbers linked to WhatsLark</CardDescription>
                 </div>
-                <Button size="sm" onClick={() => setShowAdd(true)}>
+                <Button size="sm" onClick={() => setShowAdd(true)} className="w-full sm:w-auto">
                   <Plus className="w-4 h-4 mr-1.5" />Connect number
                 </Button>
               </CardHeader>
@@ -311,16 +311,16 @@ export default function SettingsPage() {
                 ) : (
                   <div className="space-y-3">
                     {channels.map((ch) => (
-                      <div key={ch.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${ch.is_active ? 'bg-green-100' : 'bg-muted'}`}>
+                      <div key={ch.id} className="flex flex-wrap items-center justify-between gap-3 p-3 border rounded-lg">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${ch.is_active ? 'bg-green-100' : 'bg-muted'}`}>
                             {ch.is_active
                               ? <CheckCircle className="w-4 h-4 text-green-600" />
                               : <XCircle className="w-4 h-4 text-muted-foreground" />}
                           </div>
-                          <div>
-                            <p className="text-sm font-medium">{ch.name}</p>
-                            <p className="text-xs text-muted-foreground">{ch.phone_number}</p>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{ch.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{ch.phone_number}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">

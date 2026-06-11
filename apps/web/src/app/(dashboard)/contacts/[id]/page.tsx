@@ -123,7 +123,7 @@ export default function ContactDetailPage() {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="h-8 w-48 bg-muted animate-pulse rounded mb-6" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {[...Array(3)].map((_, i) => <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />)}
@@ -132,30 +132,32 @@ export default function ContactDetailPage() {
     );
   }
 
-  if (!contact) return <div className="p-6 text-muted-foreground">Contact not found</div>;
+  if (!contact) return <div className="p-4 sm:p-6 text-muted-foreground">Contact not found</div>;
 
   return (
-    <div className="p-6 max-w-5xl">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="p-4 sm:p-6 max-w-5xl">
+      <div className="flex flex-wrap items-center gap-4 mb-6">
         <Link href="/contacts">
           <Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button>
         </Link>
-        <div className="flex items-center gap-4 flex-1">
-          <Avatar className="w-14 h-14">
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <Avatar className="w-14 h-14 flex-shrink-0">
             <AvatarFallback className="bg-primary/10 text-primary text-xl">
               {getInitials(contact.name || contact.phone)}
             </AvatarFallback>
           </Avatar>
-          <div>
-            <h1 className="text-2xl font-bold">{contact.name || contact.phone}</h1>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">{contact.name || contact.phone}</h1>
             <p className="text-muted-foreground">{contact.phone}</p>
           </div>
         </div>
-        <Button variant="outline" onClick={openEdit}><Edit2 className="w-4 h-4 mr-2" />Edit</Button>
-        <Button onClick={handleMessage} disabled={messaging}>
-          {messaging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MessageSquare className="w-4 h-4 mr-2" />}
-          Message
-        </Button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={openEdit} className="flex-1 sm:flex-none"><Edit2 className="w-4 h-4 mr-2" />Edit</Button>
+          <Button onClick={handleMessage} disabled={messaging} className="flex-1 sm:flex-none">
+            {messaging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MessageSquare className="w-4 h-4 mr-2" />}
+            Message
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -191,7 +193,7 @@ export default function ContactDetailPage() {
           <CardHeader><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Custom fields</CardTitle></CardHeader>
           <CardContent>
             {contact.custom_fields && Object.keys(contact.custom_fields).length ? (
-              <dl className="grid grid-cols-2 gap-3">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Object.entries(contact.custom_fields).map(([k, v]) => (
                   <div key={k}>
                     <dt className="text-xs text-muted-foreground">{k}</dt>

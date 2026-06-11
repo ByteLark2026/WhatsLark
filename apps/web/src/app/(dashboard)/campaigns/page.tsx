@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { CampaignStatus } from '@whatslark/shared';
 import type { Campaign, MessageTemplate, WhatsAppChannel, Contact } from '@whatslark/shared';
@@ -177,35 +178,49 @@ export default function CampaignsPage() {
         toast({ title: 'Campaign updated' });
       }
     } else {
-      const { data, error } = await supabase
-        .from('campaigns')
-        .insert({
-          company_id: company.id,
-          channel_id: channelId,
-          created_by: user.id,
+      try {
+        const created = await api.post<{ id: string }>('/campaigns', {
           name: form.name,
-          status: 'draft',
           template_id: selectedTemplate.id,
-          total_recipients: selectedContacts.length,
-          sent_count: 0,
-          delivered_count: 0,
-          read_count: 0,
-          failed_count: 0,
-          replied_count: 0,
-          scheduled_at: form.scheduled_at || null,
-        })
-        .select()
-        .single();
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' });
-      } else {
-        setCampaigns((prev) => [data as unknown as Campaign, ...prev]);
+          channel_id: channelId,
+          contact_ids: selectedContacts,
+          scheduled_at: form.scheduled_at || undefined,
+        });
+
+        if (!form.scheduled_at) {
+          await api.post(`/campaigns/${created.id}/launch`);
+        }
+
+        const { data } = await supabase
+          .from('campaigns')
+          .select('*, template:message_templates(name, category, language), channel:whatsapp_channels(name, phone_number)')
+          .eq('id', created.id)
+          .single();
+
+        if (data) setCampaigns((prev) => [data as unknown as Campaign, ...prev]);
         setStats((s) => ({ ...s, total: s.total + 1, recipients: s.recipients + selectedContacts.length }));
         closeCreateDialog();
-        toast({ title: 'Campaign created', description: 'Campaign saved as draft.' });
+        toast({
+          title: 'Campaign created',
+          description: form.scheduled_at ? 'Campaign scheduled.' : 'Campaign launched — sending messages now.',
+        });
+      } catch (err: any) {
+        toast({ title: 'Error', description: err.message, variant: 'destructive' });
       }
     }
     setCreating(false);
+  };
+
+  const handleLaunch = async (campaign: Campaign) => {
+    try {
+      await api.post(`/campaigns/${campaign.id}/launch`);
+      setCampaigns((prev) => prev.map((c) => (
+        c.id === campaign.id ? { ...c, status: CampaignStatus.RUNNING, started_at: new Date().toISOString() } : c
+      )));
+      toast({ title: 'Campaign launched', description: 'Messages are being sent now.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
   };
 
   const handleStatusChange = async (campaign: Campaign, status: CampaignStatus) => {
@@ -263,9 +278,9 @@ export default function CampaignsPage() {
         }
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Stats */}
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {[
             { label: 'Total Campaigns', value: stats.total, sub: `${campaigns.filter(c => c.status === 'running' || c.status === 'scheduled').length} Active` },
             { label: 'Total Recipients', value: stats.recipients.toLocaleString(), sub: `${campaigns.reduce((s, c) => s + (c.sent_count || 0), 0)} Sent` },
@@ -304,7 +319,7 @@ export default function CampaignsPage() {
             ) : (
               <div className="divide-y">
                 {/* Table header */}
-                <div className="grid grid-cols-6 gap-4 px-4 py-2 text-xs font-medium text-muted-foreground bg-muted/30">
+                <div className="hidden md:grid grid-cols-6 gap-4 px-4 py-2 text-xs font-medium text-muted-foreground bg-muted/30">
                   <div className="col-span-2">Campaign</div>
                   <div>Recipients</div>
                   <div>Delivery Rate</div>
@@ -318,7 +333,7 @@ export default function CampaignsPage() {
                   const readRate = campaign.delivered_count > 0
                     ? Math.round((campaign.read_count / campaign.delivered_count) * 100) : 0;
                   return (
-                    <div key={campaign.id} className="grid grid-cols-6 gap-4 px-4 py-3 items-center hover:bg-muted/20 transition-colors">
+                    <div key={campaign.id} className="grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-2 px-4 py-3 items-center hover:bg-muted/20 transition-colors">
                       <div className="col-span-2">
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-sm truncate">{campaign.name}</p>
@@ -348,7 +363,7 @@ export default function CampaignsPage() {
                           {readRate}%
                         </div>
                       </div>
-                      <div>
+                      <div className="col-span-2 md:col-span-1 flex justify-end md:justify-start">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -359,6 +374,9 @@ export default function CampaignsPage() {
                             <DropdownMenuItem onClick={() => setViewTarget(campaign)}>View details</DropdownMenuItem>
                             {campaign.status === 'draft' && (
                               <DropdownMenuItem onClick={() => openEditDialog(campaign)}>Edit</DropdownMenuItem>
+                            )}
+                            {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
+                              <DropdownMenuItem onClick={() => handleLaunch(campaign)}>Launch now</DropdownMenuItem>
                             )}
                             {campaign.status === 'running' && (
                               <DropdownMenuItem onClick={() => handleStatusChange(campaign, CampaignStatus.PAUSED)}>Pause</DropdownMenuItem>
@@ -589,7 +607,7 @@ export default function CampaignsPage() {
                 <span className="text-xs text-muted-foreground">Created {formatDate(viewTarget.created_at)}</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground text-xs">Template</p>
                   <p className="font-medium">{viewTarget.template?.name || '—'}</p>
