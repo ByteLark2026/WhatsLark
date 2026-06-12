@@ -19,15 +19,15 @@ export default function AdminCompaniesPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    api.get<Company[]>('/super-admin/companies')
-      .then(setCompanies)
+    api.get<{ data: Company[] }>('/admin/companies')
+      .then((res) => setCompanies(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
   const handleStatusChange = async (company: Company, status: Company['status']) => {
     try {
-      await api.patch(`/super-admin/companies/${company.id}`, { status });
+      await api.patch(`/admin/companies/${company.id}/status`, { status });
       setCompanies((prev) => prev.map((c) => c.id === company.id ? { ...c, status } : c));
       toast({ title: `Company ${status}` });
     } catch (err: any) {

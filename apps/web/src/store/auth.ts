@@ -15,7 +15,7 @@ interface AuthState {
   company: Company | null;
   role: UserRole | null;
   accessToken: string | null;
-  setAuth: (user: AuthUser, company: Company, role: UserRole, token: string) => void;
+  setAuth: (user: AuthUser, company: Company | null, role: UserRole | null, token: string) => void;
   clearAuth: () => void;
 }
 

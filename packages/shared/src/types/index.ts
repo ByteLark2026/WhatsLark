@@ -91,6 +91,60 @@ export enum AutomationAction {
   CREATE_LEAD = 'create_lead',
 }
 
+// ----- Super Admin: Notifications -----
+
+export enum NotificationAudience {
+  ALL = 'all',
+  COMPANIES = 'companies',
+  USERS = 'users',
+}
+
+export enum NotificationSeverity {
+  INFO = 'info',
+  WARNING = 'warning',
+  CRITICAL = 'critical',
+}
+
+// ----- Super Admin: Transactions -----
+
+export enum TransactionStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  REFUNDED = 'refunded',
+}
+
+export enum TransactionType {
+  SUBSCRIPTION = 'subscription',
+  ADDON = 'addon',
+  REFUND = 'refund',
+  MANUAL = 'manual',
+}
+
+// ----- Super Admin: Support Tickets -----
+
+export enum SupportTicketStatus {
+  OPEN = 'open',
+  IN_PROGRESS = 'in_progress',
+  RESOLVED = 'resolved',
+  CLOSED = 'closed',
+}
+
+export enum SupportTicketPriority {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+  URGENT = 'urgent',
+}
+
+// ----- Super Admin: App Versions -----
+
+export enum AppPlatform {
+  ANDROID = 'android',
+  IOS = 'ios',
+  WEB = 'web',
+}
+
 // ----- Base Entity -----
 
 export interface BaseEntity {
@@ -353,4 +407,127 @@ export interface AgentPerformance {
   open_conversations: number;
   closed_today: number;
   avg_response_time_minutes: number;
+}
+
+// ----- Super Admin: Subscription Plans -----
+
+export interface SubscriptionPlanConfig extends BaseEntity {
+  name: string;
+  slug: string;
+  price_monthly: number;
+  price_yearly: number;
+  currency: string;
+  max_users?: number;
+  max_channels?: number;
+  max_contacts?: number;
+  max_messages_per_month?: number;
+  features: string[];
+  is_active: boolean;
+  sort_order: number;
+}
+
+// ----- Super Admin: Notifications -----
+
+export interface AdminNotification extends BaseEntity {
+  title: string;
+  message: string;
+  severity: NotificationSeverity;
+  audience: NotificationAudience;
+  target_company_ids?: string[];
+  is_published: boolean;
+  published_at?: string;
+  created_by?: string;
+}
+
+// ----- Super Admin: Transactions -----
+
+export interface Transaction extends BaseEntity {
+  company_id: string;
+  subscription_id?: string;
+  amount: number;
+  currency: string;
+  type: TransactionType;
+  status: TransactionStatus;
+  payment_method?: string;
+  gateway_reference?: string;
+  description?: string;
+  created_by?: string;
+  company?: Company;
+}
+
+// ----- Super Admin: Support Tickets -----
+
+export interface SupportTicketReply {
+  id: string;
+  ticket_id: string;
+  author_id?: string;
+  is_internal_note: boolean;
+  message: string;
+  created_at: string;
+  author?: User;
+}
+
+export interface SupportTicket extends BaseEntity {
+  company_id?: string;
+  user_id?: string;
+  subject: string;
+  description: string;
+  status: SupportTicketStatus;
+  priority: SupportTicketPriority;
+  assigned_to?: string;
+  company?: Company;
+  user?: User;
+  replies?: SupportTicketReply[];
+}
+
+// ----- Super Admin: App Versions -----
+
+export interface AppVersion extends BaseEntity {
+  platform: AppPlatform;
+  version: string;
+  build_number?: number;
+  release_notes?: string;
+  download_url?: string;
+  is_force_update: boolean;
+  is_published: boolean;
+  released_at: string;
+}
+
+// ----- Super Admin: Payment Gateway Settings -----
+
+export interface PaymentGatewaySettings extends BaseEntity {
+  provider: string;
+  is_enabled: boolean;
+  is_test_mode: boolean;
+  public_key?: string;
+  secret_key_masked?: string;
+  webhook_secret_masked?: string;
+  config: Record<string, unknown>;
+}
+
+// ----- Super Admin: Platform Stats & Analytics -----
+
+export interface AdminPlatformStats {
+  total_companies: number;
+  active_companies: number;
+  total_users: number;
+  total_conversations: number;
+  total_campaigns: number;
+  total_channels: number;
+  total_messages: number;
+  plan_breakdown: Record<string, number>;
+}
+
+export interface PlatformAnalytics {
+  messages: { created_at: string; status: string; direction: string }[];
+  campaigns: {
+    status: string;
+    total_recipients: number;
+    sent_count: number;
+    delivered_count: number;
+    read_count: number;
+    failed_count: number;
+    replied_count: number;
+  }[];
+  contact_count: number;
 }

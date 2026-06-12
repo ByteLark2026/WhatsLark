@@ -36,7 +36,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const companyUser = profile?.company_users?.[0];
         if (profile && companyUser) {
           setAuth(profile, companyUser.companies, companyUser.role, session.access_token);
-          localStorage.setItem('sb-token', JSON.stringify({ access_token: session.access_token }));
         }
       }
 

@@ -52,7 +52,6 @@ export default function RegisterPage() {
       const companyUser = profile?.company_users?.[0];
       if (companyUser) {
         setAuth(profile, companyUser.companies, UserRole.OWNER, data.session!.access_token);
-        localStorage.setItem('sb-token', JSON.stringify({ access_token: data.session!.access_token }));
       }
 
       toast({ title: 'Workspace created!', description: 'Welcome to WhatsLark.' });

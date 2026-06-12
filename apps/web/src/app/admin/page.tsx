@@ -1,25 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, Users, MessageSquare, Megaphone, TrendingUp } from 'lucide-react';
+import { Building2, Users, MessageSquare, Megaphone, TrendingUp, Radio, Send } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
-
-interface AdminStats {
-  total_companies: number;
-  active_companies: number;
-  total_users: number;
-  total_conversations: number;
-  total_campaigns: number;
-  plan_breakdown: Record<string, number>;
-}
+import type { AdminPlatformStats } from '@whatslark/shared';
 
 export default function AdminPage() {
-  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [stats, setStats] = useState<AdminPlatformStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<AdminStats>('/super-admin/stats')
+    api.get<AdminPlatformStats>('/admin/stats')
       .then(setStats)
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -31,6 +23,8 @@ export default function AdminPage() {
     { label: 'Total Users', value: stats?.total_users ?? 0, icon: Users, color: 'text-purple-600', bg: 'bg-purple-50' },
     { label: 'Total Conversations', value: stats?.total_conversations ?? 0, icon: MessageSquare, color: 'text-orange-600', bg: 'bg-orange-50' },
     { label: 'Total Campaigns', value: stats?.total_campaigns ?? 0, icon: Megaphone, color: 'text-pink-600', bg: 'bg-pink-50' },
+    { label: 'Total Channels', value: stats?.total_channels ?? 0, icon: Radio, color: 'text-cyan-600', bg: 'bg-cyan-50' },
+    { label: 'Total Messages', value: stats?.total_messages ?? 0, icon: Send, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   ];
 
   return (
@@ -40,7 +34,7 @@ export default function AdminPage() {
         <p className="text-muted-foreground">Platform-wide statistics</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         {cards.map((c) => (
           <Card key={c.label}>
             <CardContent className="pt-6">

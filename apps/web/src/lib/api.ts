@@ -1,3 +1,5 @@
+import { createClient } from './supabase';
+
 const API_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1`;
 
 class ApiClient {
@@ -7,18 +9,14 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  private getToken(): string | null {
+  private async getToken(): Promise<string | null> {
     if (typeof window === 'undefined') return null;
-    try {
-      const raw = localStorage.getItem('sb-token');
-      return raw ? JSON.parse(raw)?.access_token ?? null : null;
-    } catch {
-      return null;
-    }
+    const { data } = await createClient().auth.getSession();
+    return data.session?.access_token ?? null;
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const token = this.getToken();
+    const token = await this.getToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),

@@ -17,4 +17,11 @@ export class SuperAdminController {
   @Patch('companies/:id/status') status(@Param('id') id: string, @Body('status') status: string) { return this.service.setCompanyStatus(id, status); }
   @Get('companies/:id/usage') usage(@Param('id') id: string) { return this.service.getUsage(id); }
   @Get('users') users(@Query() q: any) { return this.service.listUsers(q); }
+
+  @Get('channels') channels(@Query() q: any) { return this.service.listChannels(q); }
+  @Get('campaigns') allCampaigns(@Query() q: any) { return this.service.listAllCampaigns(q); }
+  @Get('templates') allTemplates(@Query() q: any) { return this.service.listAllTemplates(q); }
+  @Get('contacts') allContacts(@Query() q: any) { return this.service.listAllContacts(q); }
+  @Get('message-logs') messageLogs(@Query() q: any) { return this.service.listMessageLogs(q); }
+  @Get('analytics') analytics(@Query() q: any) { return this.service.getPlatformAnalytics(q); }
 }

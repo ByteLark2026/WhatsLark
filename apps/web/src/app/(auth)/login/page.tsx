@@ -42,14 +42,12 @@ export default function LoginPage() {
       if (profileError) throw new Error('Failed to load user profile');
 
       const companyUser = profile?.company_users?.[0];
-      if (companyUser) {
-        setAuth(profile, companyUser.companies, companyUser.role, data.session!.access_token);
-        localStorage.setItem('sb-token', JSON.stringify({ access_token: data.session!.access_token }));
-      }
+      setAuth(profile, companyUser?.companies ?? null, companyUser?.role ?? null, data.session!.access_token);
 
       toast({ title: 'Welcome back!', description: `Logged in as ${profile?.full_name}` });
 
-      const next = new URLSearchParams(window.location.search).get('next') || '/dashboard';
+      const defaultRoute = profile?.is_super_admin ? '/admin' : '/dashboard';
+      const next = new URLSearchParams(window.location.search).get('next') || defaultRoute;
       router.push(next);
     } catch (err: any) {
       toast({ title: 'Login failed', description: err.message, variant: 'destructive' });
