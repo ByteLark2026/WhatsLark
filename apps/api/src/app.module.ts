@@ -18,6 +18,7 @@ import { AutomationsModule } from './automations/automations.module';
 import { AiModule } from './ai/ai.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SuperAdminModule } from './super-admin/super-admin.module';
+import { SupportTicketsModule } from './support-tickets/support-tickets.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SupabaseModule } from './common/supabase.module';
 
@@ -56,6 +57,7 @@ import { SupabaseModule } from './common/supabase.module';
     AiModule,
     DashboardModule,
     SuperAdminModule,
+    SupportTicketsModule,
     RealtimeModule,
   ],
 })

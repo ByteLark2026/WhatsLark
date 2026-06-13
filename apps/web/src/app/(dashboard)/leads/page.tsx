@@ -13,7 +13,7 @@ import { Header } from '@/components/layout/header';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth';
-import { getInitials, formatCurrency } from '@/lib/utils';
+import { getInitials, formatCurrency, CURRENCIES } from '@/lib/utils';
 import { LeadStage } from '@whatslark/shared';
 import type { Lead, Contact } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
@@ -217,7 +217,7 @@ export default function LeadsPage() {
                 <Select value={form.currency} onValueChange={(v) => setForm({ ...form, currency: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {['USD', 'EUR', 'GBP', 'MYR', 'SGD', 'IDR'].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

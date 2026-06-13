@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Search, Upload, MoreHorizontal, Phone, Mail, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,21 +28,95 @@ export default function ContactsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', email: '' });
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const loadContacts = async () => {
     if (!company?.id) { setLoading(false); return; }
     const supabase = createClient();
-    (async () => {
-      const { data, error } = await supabase
-        .from('contacts')
-        .select('*')
-        .eq('company_id', company.id)
-        .order('created_at', { ascending: false });
-      if (error) console.error(error);
-      if (data) setContacts(data as Contact[]);
-      setLoading(false);
-    })();
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('company_id', company.id)
+      .order('created_at', { ascending: false });
+    if (error) console.error(error);
+    if (data) setContacts(data as Contact[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadContacts();
   }, [company?.id]);
+
+  const parseCsv = (text: string): Record<string, string>[] => {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length === 0) return [];
+
+    const parseLine = (line: string): string[] => {
+      const cells: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (inQuotes) {
+          if (char === '"' && line[i + 1] === '"') { current += '"'; i++; }
+          else if (char === '"') inQuotes = false;
+          else current += char;
+        } else if (char === '"') inQuotes = true;
+        else if (char === ',') { cells.push(current.trim()); current = ''; }
+        else current += char;
+      }
+      cells.push(current.trim());
+      return cells;
+    };
+
+    const header = parseLine(lines[0]).map((h) => h.toLowerCase());
+    return lines.slice(1).map((line) => {
+      const cells = parseLine(line);
+      const row: Record<string, string> = {};
+      header.forEach((key, i) => { row[key] = cells[i] ?? ''; });
+      return row;
+    });
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !company?.id) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+
+      const records = rows
+        .map((row) => ({
+          company_id: company.id,
+          phone: (row.phone || row.phone_number || row.mobile || '').trim(),
+          name: (row.name || row.full_name || '').trim() || null,
+          email: (row.email || '').trim() || null,
+        }))
+        .filter((r) => r.phone);
+
+      if (records.length === 0) {
+        toast({ title: 'No valid rows found', description: 'CSV must include a "phone" column.', variant: 'destructive' });
+        return;
+      }
+
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('contacts')
+        .upsert(records, { onConflict: 'company_id,phone' });
+      if (error) throw error;
+
+      await loadContacts();
+      toast({ title: 'Import complete', description: `${records.length} contact(s) imported.` });
+    } catch (err: any) {
+      toast({ title: 'Import failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const filtered = contacts.filter((c) => {
     const q = search.toLowerCase();
@@ -148,7 +222,16 @@ export default function ContactsPage() {
         subtitle={`${contacts.length} contacts`}
         actions={
           <>
-            <Button variant="outline" size="sm"><Upload className="w-4 h-4 mr-2" />Import CSV</Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <Button variant="outline" size="sm" disabled={importing} onClick={() => fileInputRef.current?.click()}>
+              <Upload className="w-4 h-4 mr-2" />{importing ? 'Importing…' : 'Import CSV'}
+            </Button>
             <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" />Add contact</Button>
           </>
         }

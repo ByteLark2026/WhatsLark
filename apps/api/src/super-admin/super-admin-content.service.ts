@@ -189,6 +189,24 @@ export class SuperAdminContentService {
     return { data, total: count, page, limit };
   }
 
+  async createSupportTicket(dto: any) {
+    const { data, error } = await this.supabase.getAdminClient()
+      .from('support_tickets')
+      .insert({
+        company_id: dto.company_id || null,
+        user_id: dto.user_id || null,
+        subject: dto.subject,
+        description: dto.description,
+        status: dto.status || 'open',
+        priority: dto.priority || 'medium',
+        assigned_to: dto.assigned_to || null,
+      })
+      .select()
+      .single();
+    if (error) throw new BadRequestException(error.message);
+    return data;
+  }
+
   async getSupportTicket(id: string) {
     const { data, error } = await this.supabase.getAdminClient()
       .from('support_tickets')

@@ -34,6 +34,7 @@ export class SuperAdminContentController {
 
   // Support Tickets
   @Get('support-tickets') listSupportTickets(@Query() q: any) { return this.service.listSupportTickets(q); }
+  @Post('support-tickets') createSupportTicket(@Body() dto: any) { return this.service.createSupportTicket(dto); }
   @Get('support-tickets/:id') getSupportTicket(@Param('id') id: string) { return this.service.getSupportTicket(id); }
   @Patch('support-tickets/:id') updateSupportTicket(@Param('id') id: string, @Body() dto: any) { return this.service.updateSupportTicket(id, dto); }
   @Post('support-tickets/:id/replies') addSupportTicketReply(@Param('id') id: string, @Body() dto: any) { return this.service.addSupportTicketReply(id, dto); }

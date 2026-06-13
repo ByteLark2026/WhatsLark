@@ -1,17 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { SupportTicketStatus, SupportTicketPriority } from '@whatslark/shared';
-import type { SupportTicket, SupportTicketReply } from '@whatslark/shared';
+import type { SupportTicket, SupportTicketReply, Company } from '@whatslark/shared';
 import { AdminPagination } from '@/components/admin/pagination';
 import { useToast } from '@/hooks/use-toast';
 
@@ -40,6 +42,13 @@ function single<T>(v: T | T[] | undefined): T | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
+const emptyNewTicket = {
+  company_id: '',
+  subject: '',
+  description: '',
+  priority: SupportTicketPriority.MEDIUM as string,
+};
+
 export default function AdminSupportTicketsPage() {
   const { toast } = useToast();
   const [tickets, setTickets] = useState<AdminTicket[]>([]);
@@ -51,6 +60,10 @@ export default function AdminSupportTicketsPage() {
   const [reply, setReply] = useState('');
   const [internalNote, setInternalNote] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newTicket, setNewTicket] = useState(emptyNewTicket);
+  const [creating, setCreating] = useState(false);
   const limit = 20;
 
   const load = () => {
@@ -64,6 +77,34 @@ export default function AdminSupportTicketsPage() {
   };
 
   useEffect(load, [page, status]);
+
+  useEffect(() => {
+    api.get<{ data: Company[] }>('/admin/companies?limit=200')
+      .then((res) => setCompanies(res.data))
+      .catch(console.error);
+  }, []);
+
+  const createTicket = async () => {
+    if (!newTicket.subject.trim() || !newTicket.description.trim()) {
+      toast({ title: 'Subject and description are required', variant: 'destructive' });
+      return;
+    }
+    setCreating(true);
+    try {
+      await api.post('/admin/support-tickets', {
+        ...newTicket,
+        company_id: newTicket.company_id || undefined,
+      });
+      toast({ title: 'Ticket created' });
+      setNewOpen(false);
+      setNewTicket(emptyNewTicket);
+      load();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const openTicket = async (id: string) => {
     try {
@@ -114,15 +155,56 @@ export default function AdminSupportTicketsPage() {
           <h1 className="text-2xl font-bold">Support Tickets</h1>
           <p className="text-muted-foreground">{total.toLocaleString()} tickets across all companies</p>
         </div>
-        <Select value={status} onValueChange={(v) => { setPage(1); setStatus(v); }}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {Object.values(SupportTicketStatus).map((s) => (
-              <SelectItem key={s} value={s} className="capitalize">{s.replace('_', ' ')}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2">
+          <Select value={status} onValueChange={(v) => { setPage(1); setStatus(v); }}>
+            <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {Object.values(SupportTicketStatus).map((s) => (
+                <SelectItem key={s} value={s} className="capitalize">{s.replace('_', ' ')}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Dialog open={newOpen} onOpenChange={setNewOpen}>
+            <DialogTrigger asChild>
+              <Button><Plus className="w-4 h-4 mr-2" />New Ticket</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>New Support Ticket</DialogTitle></DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Company (optional)</Label>
+                  <Select value={newTicket.company_id} onValueChange={(v) => setNewTicket({ ...newTicket, company_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select a company" /></SelectTrigger>
+                    <SelectContent>
+                      {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Subject</Label>
+                  <Input value={newTicket.subject} onChange={(e) => setNewTicket({ ...newTicket, subject: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea rows={4} value={newTicket.description} onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Priority</Label>
+                  <Select value={newTicket.priority} onValueChange={(v) => setNewTicket({ ...newTicket, priority: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.values(SupportTicketPriority).map((p) => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={createTicket} disabled={creating}>{creating ? 'Creating…' : 'Create Ticket'}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="rounded-lg border overflow-x-auto">

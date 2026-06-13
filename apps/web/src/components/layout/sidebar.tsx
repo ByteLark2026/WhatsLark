@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, MessageSquare, Users, TrendingUp, Megaphone,
   FileText, Zap, Bot, Phone, UserCog, Settings, LogOut, ChevronDown,
-  Shield, BarChart2, Code2,
+  Shield, BarChart2, Code2, LifeBuoy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -28,6 +28,7 @@ const navItems = [
   { href: '/ai-bot', label: 'AI Bot', icon: Bot },
   { href: '/channels', label: 'Channels', icon: Phone },
   { href: '/team', label: 'Team', icon: UserCog },
+  { href: '/support', label: 'Support', icon: LifeBuoy },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

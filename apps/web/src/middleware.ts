@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 const PROTECTED_PREFIXES = [
   '/dashboard', '/inbox', '/contacts', '/leads', '/campaigns',
   '/templates', '/automations', '/analytics', '/widget-builder',
-  '/ai-bot', '/channels', '/team', '/settings', '/admin',
+  '/ai-bot', '/channels', '/team', '/settings', '/admin', '/support',
 ]
 
 export async function middleware(request: NextRequest) {
@@ -68,5 +68,6 @@ export const config = {
     '/team/:path*',
     '/settings/:path*',
     '/admin/:path*',
+    '/support/:path*',
   ],
 }

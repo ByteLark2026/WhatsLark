@@ -38,6 +38,12 @@ export function truncate(str: string, maxLength: number) {
   return str.length > maxLength ? str.slice(0, maxLength) + '...' : str;
 }
 
+// INR, AED and other GCC currencies first, then other major currencies.
+export const CURRENCIES = [
+  'INR', 'AED', 'SAR', 'QAR', 'KWD', 'BHD', 'OMR',
+  'USD', 'EUR', 'GBP', 'MYR', 'SGD', 'IDR', 'AUD', 'CAD', 'PKR', 'PHP',
+] as const;
+
 export function getInitials(name: string) {
   return name
     .split(' ')
