@@ -150,12 +150,12 @@ export default function AdminSupportTicketsPage() {
 
   return (
     <div className="p-4 sm:p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold">Support Tickets</h1>
           <p className="text-muted-foreground">{total.toLocaleString()} tickets across all companies</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Select value={status} onValueChange={(v) => { setPage(1); setStatus(v); }}>
             <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
@@ -252,7 +252,7 @@ export default function AdminSupportTicketsPage() {
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selected.description}</p>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Status</Label>
                     <Select value={selected.status} onValueChange={(v) => updateField('status', v)}>
