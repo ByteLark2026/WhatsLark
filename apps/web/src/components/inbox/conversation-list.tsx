@@ -1,8 +1,7 @@
 'use client';
 
-import { cn, getInitials, formatRelativeTime, truncate } from '@/lib/utils';
+import { cn, getInitials, formatRelativeTime } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import type { Conversation } from '@whatslark/shared';
 
 interface Props {
@@ -13,9 +12,9 @@ interface Props {
 }
 
 const statusBadge = {
-  open: { label: 'Open', class: 'bg-green-100 text-green-800' },
-  pending: { label: 'Pending', class: 'bg-yellow-100 text-yellow-800' },
-  closed: { label: 'Closed', class: 'bg-gray-100 text-gray-600' },
+  open:    { label: 'Open',    cls: 'bg-green-100 text-green-800' },
+  pending: { label: 'Pending', cls: 'bg-yellow-100 text-yellow-800' },
+  closed:  { label: 'Closed',  cls: 'bg-gray-100 text-gray-600' },
 };
 
 export function ConversationList({ conversations, selectedId, onSelect, loading }: Props) {
@@ -36,15 +35,21 @@ export function ConversationList({ conversations, selectedId, onSelect, loading 
   }
 
   if (!conversations.length) {
-    return <p className="text-sm text-muted-foreground text-center py-8">No conversations</p>;
+    return (
+      <p className="text-sm text-muted-foreground text-center py-8 px-4">
+        No conversations
+      </p>
+    );
   }
 
   return (
-    <div className="overflow-y-auto">
+    <div className="overflow-y-auto flex-1">
       {conversations.map((conv) => {
         const contact = conv.contact;
+        const channel = (conv as any).channel as { name: string; phone_number: string; is_active: boolean } | undefined;
         const name = contact?.name || contact?.phone || 'Unknown';
-        const badge = statusBadge[conv.status];
+        const badge = statusBadge[conv.status] ?? statusBadge.open;
+
         return (
           <button
             key={conv.id}
@@ -60,6 +65,7 @@ export function ConversationList({ conversations, selectedId, onSelect, loading 
                 {getInitials(name)}
               </AvatarFallback>
             </Avatar>
+
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1">
                 <span className="text-sm font-medium truncate">{name}</span>
@@ -74,11 +80,25 @@ export function ConversationList({ conversations, selectedId, onSelect, loading 
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-xs text-muted-foreground truncate flex-1">
-                  {conv.last_message_preview || 'No messages yet'}
-                </p>
-                <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0', badge.class)}>
+
+              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                {conv.last_message_preview || 'No messages yet'}
+              </p>
+
+              <div className="flex items-center gap-1.5 mt-1">
+                {/* Channel pill */}
+                {channel && (
+                  <span className={cn(
+                    'text-[10px] px-1.5 py-0.5 rounded-full font-medium truncate max-w-[100px]',
+                    channel.is_active
+                      ? 'bg-green-50 text-green-700'
+                      : 'bg-gray-100 text-gray-500',
+                  )}>
+                    {channel.name}
+                  </span>
+                )}
+                {/* Status pill */}
+                <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0', badge.cls)}>
                   {badge.label}
                 </span>
               </div>

@@ -90,7 +90,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Save message optimistically as 'sent'
-    const { data: msgRow, error: msgErr } = await adminSupabase
+    // channel_id is included if the column exists (migration 008); falls back
+    // gracefully so sending works even before the migration is applied.
+    let msgRow: any;
+    let msgErr: any;
+    const withChannel = await adminSupabase
       .from('messages')
       .insert({
         conversation_id,
@@ -105,6 +109,29 @@ export async function POST(req: NextRequest) {
       })
       .select()
       .single();
+
+    if (withChannel.error?.message?.includes('channel_id')) {
+      // Migration 008 not yet applied — retry without channel_id
+      const withoutChannel = await adminSupabase
+        .from('messages')
+        .insert({
+          conversation_id,
+          company_id: conv.company_id,
+          direction: 'outbound',
+          type: 'text',
+          content: message.trim(),
+          status: 'sent',
+          sender_id,
+          is_note: false,
+        })
+        .select()
+        .single();
+      msgRow = withoutChannel.data;
+      msgErr = withoutChannel.error;
+    } else {
+      msgRow = withChannel.data;
+      msgErr = withChannel.error;
+    }
 
     if (msgErr) return NextResponse.json({ error: msgErr.message }, { status: 500 });
 

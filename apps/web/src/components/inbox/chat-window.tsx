@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Send, MoreVertical, UserCheck, CheckCheck, Check, Clock, AlertCircle, StickyNote, ArrowLeft } from 'lucide-react';
+import { Send, MoreVertical, UserCheck, CheckCheck, Check, Clock, AlertCircle, StickyNote, ArrowLeft, Phone, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -38,6 +38,7 @@ export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const contact = conversation.contact;
+  const channel = (conversation as any).channel as { id: string; name: string; phone_number: string; is_active: boolean } | undefined;
   const name = contact?.name || contact?.phone || 'Unknown';
 
   useEffect(() => {
@@ -124,7 +125,18 @@ export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
           </Avatar>
           <div className="min-w-0">
             <p className="font-medium text-sm truncate">{name}</p>
-            <p className="text-xs text-muted-foreground truncate">{contact?.phone}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground truncate">{contact?.phone}</p>
+              {channel && (
+                <span className={cn(
+                  'text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0',
+                  channel.is_active ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700',
+                )}>
+                  <Phone className="w-2.5 h-2.5" />
+                  {channel.name}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -204,6 +216,14 @@ export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
       </div>
 
       <div className="border-t p-3 space-y-2">
+        {channel && !channel.is_active && !isNote && (
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-orange-50 border border-orange-200">
+            <WifiOff className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+            <span className="text-xs text-orange-700">
+              Channel <strong>{channel.name}</strong> is paused — messages will not be delivered until reactivated.
+            </span>
+          </div>
+        )}
         {isNote && (
           <div className="flex items-center gap-2 px-1">
             <StickyNote className="w-3.5 h-3.5 text-yellow-600" />
