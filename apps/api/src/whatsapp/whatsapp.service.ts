@@ -1,6 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import axios from 'axios';
 import { SupabaseService } from '../common/supabase.service';
+
+const CHANNEL_SELECT =
+  'id, name, phone_number, phone_number_id, business_account_id, webhook_verify_token, meta_app_id, is_active, created_at, updated_at';
 
 @Injectable()
 export class WhatsAppService {
@@ -9,21 +12,53 @@ export class WhatsAppService {
 
   constructor(private readonly supabase: SupabaseService) {}
 
-  async addChannel(companyId: string, dto: {
-    name: string;
-    phone_number: string;
-    phone_number_id: string;
-    business_account_id: string;
-    access_token: string;
-  }) {
-    // Verify token by calling WhatsApp API
+  // Resolve company_id for the current user (CompanyMiddleware is not registered)
+  async getCompanyId(userId: string): Promise<string> {
+    const { data, error } = await this.supabase.getAdminClient()
+      .from('company_users')
+      .select('company_id')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .limit(1)
+      .single();
+    if (error || !data) throw new ForbiddenException('No active company found for this user');
+    return data.company_id;
+  }
+
+  async getChannels(userId: string) {
+    const companyId = await this.getCompanyId(userId);
+    const { data, error } = await this.supabase.getAdminClient()
+      .from('whatsapp_channels')
+      .select(CHANNEL_SELECT)
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+    if (error) throw new BadRequestException(error.message);
+    return data;
+  }
+
+  async addChannel(
+    userId: string,
+    dto: {
+      name: string;
+      phone_number: string;
+      phone_number_id: string;
+      business_account_id: string;
+      access_token: string;
+      meta_app_id?: string;
+    },
+  ) {
+    const companyId = await this.getCompanyId(userId);
+
+    // Validate credentials against Meta Graph API before storing
     try {
       await axios.get(
         `${this.baseUrl}/${this.apiVersion}/${dto.phone_number_id}`,
         { headers: { Authorization: `Bearer ${dto.access_token}` } },
       );
     } catch {
-      throw new BadRequestException('Invalid WhatsApp credentials. Please verify your access token and phone number ID.');
+      throw new BadRequestException(
+        'Invalid WhatsApp credentials — check your Access Token and Phone Number ID.',
+      );
     }
 
     const verifyToken = this.generateVerifyToken();
@@ -36,37 +71,113 @@ export class WhatsAppService {
         phone_number: dto.phone_number,
         phone_number_id: dto.phone_number_id,
         business_account_id: dto.business_account_id,
-        access_token: dto.access_token, // store encrypted in production
+        access_token: dto.access_token,
         webhook_verify_token: verifyToken,
+        meta_app_id: dto.meta_app_id || null,
+        is_active: true,
       })
-      .select('id, name, phone_number, phone_number_id, business_account_id, webhook_verify_token, is_active, created_at')
+      .select(CHANNEL_SELECT)
       .single();
 
     if (error) throw new BadRequestException(error.message);
     return data;
   }
 
-  async getChannels(companyId: string) {
+  async updateChannel(
+    userId: string,
+    channelId: string,
+    dto: {
+      name?: string;
+      phone_number?: string;
+      phone_number_id?: string;
+      business_account_id?: string;
+      access_token?: string;
+      meta_app_id?: string;
+      is_active?: boolean;
+    },
+  ) {
+    const companyId = await this.getCompanyId(userId);
+
+    // Verify ownership
+    const { data: existing, error: fetchErr } = await this.supabase.getAdminClient()
+      .from('whatsapp_channels')
+      .select('id, phone_number_id, access_token')
+      .eq('id', channelId)
+      .eq('company_id', companyId)
+      .single();
+
+    if (fetchErr || !existing) throw new NotFoundException('Channel not found');
+
+    // If credentials changed, re-validate against Meta
+    const newPhoneNumberId = dto.phone_number_id ?? existing.phone_number_id;
+    const newToken = dto.access_token ?? existing.access_token;
+    if (dto.access_token || dto.phone_number_id) {
+      try {
+        await axios.get(
+          `${this.baseUrl}/${this.apiVersion}/${newPhoneNumberId}`,
+          { headers: { Authorization: `Bearer ${newToken}` } },
+        );
+      } catch {
+        throw new BadRequestException(
+          'Invalid WhatsApp credentials — check your Access Token and Phone Number ID.',
+        );
+      }
+    }
+
+    // Build update payload — never allow company_id / webhook_verify_token changes
+    const update: Record<string, any> = {};
+    if (dto.name !== undefined) update.name = dto.name;
+    if (dto.phone_number !== undefined) update.phone_number = dto.phone_number;
+    if (dto.phone_number_id !== undefined) update.phone_number_id = dto.phone_number_id;
+    if (dto.business_account_id !== undefined) update.business_account_id = dto.business_account_id;
+    if (dto.access_token !== undefined) update.access_token = dto.access_token;
+    if (dto.meta_app_id !== undefined) update.meta_app_id = dto.meta_app_id || null;
+    if (dto.is_active !== undefined) update.is_active = dto.is_active;
+
     const { data, error } = await this.supabase.getAdminClient()
       .from('whatsapp_channels')
-      // Never return access_token to frontend
-      .select('id, name, phone_number, phone_number_id, business_account_id, webhook_verify_token, is_active, created_at')
+      .update(update)
+      .eq('id', channelId)
       .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
+      .select(CHANNEL_SELECT)
+      .single();
 
     if (error) throw new BadRequestException(error.message);
     return data;
   }
 
-  async deleteChannel(companyId: string, channelId: string) {
+  async deleteChannel(userId: string, channelId: string) {
+    const companyId = await this.getCompanyId(userId);
     const { error } = await this.supabase.getAdminClient()
       .from('whatsapp_channels')
       .delete()
       .eq('id', channelId)
       .eq('company_id', companyId);
+    if (error) throw new BadRequestException(error.message);
+    return { message: 'Channel removed' };
+  }
+
+  async toggleActive(userId: string, channelId: string) {
+    const companyId = await this.getCompanyId(userId);
+    const { data: current } = await this.supabase.getAdminClient()
+      .from('whatsapp_channels')
+      .select('is_active')
+      .eq('id', channelId)
+      .eq('company_id', companyId)
+      .single();
+
+    if (!current) throw new NotFoundException('Channel not found');
+
+    const { data, error } = await this.supabase.getAdminClient()
+      .from('whatsapp_channels')
+      .update({ is_active: !current.is_active })
+      .eq('id', channelId)
+      .eq('company_id', companyId)
+      .select(CHANNEL_SELECT)
+      .single();
 
     if (error) throw new BadRequestException(error.message);
-    return { message: 'Channel deleted' };
+    return data;
   }
 
   async sendTextMessage(channelId: string, to: string, text: string): Promise<string> {
@@ -77,7 +188,7 @@ export class WhatsAppService {
       {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
-        to,
+        to: to.replace(/\D/g, ''), // strip non-digits
         type: 'text',
         text: { preview_url: false, body: text },
       },
@@ -105,7 +216,7 @@ export class WhatsAppService {
       `${this.baseUrl}/${this.apiVersion}/${channel.phone_number_id}/messages`,
       {
         messaging_product: 'whatsapp',
-        to,
+        to: to.replace(/\D/g, ''),
         type: 'template',
         template: { name: templateName, language: { code: language }, components },
       },
@@ -124,11 +235,7 @@ export class WhatsAppService {
     const channel = await this.getChannelWithToken(channelId);
     await axios.post(
       `${this.baseUrl}/${this.apiVersion}/${channel.phone_number_id}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        status: 'read',
-        message_id: waMessageId,
-      },
+      { messaging_product: 'whatsapp', status: 'read', message_id: waMessageId },
       { headers: { Authorization: `Bearer ${channel.access_token}` } },
     );
   }
@@ -139,7 +246,6 @@ export class WhatsAppService {
       .select('*')
       .eq('id', channelId)
       .single();
-
     if (error || !data) throw new NotFoundException('Channel not found');
     return data;
   }
@@ -149,11 +255,15 @@ export class WhatsAppService {
       .from('whatsapp_channels')
       .select('*')
       .eq('phone_number_id', phoneNumberId)
-      .single();
+      .maybeSingle();
     return data;
   }
 
   private generateVerifyToken(): string {
-    return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    return (
+      Math.random().toString(36).slice(2, 10) +
+      Math.random().toString(36).slice(2, 10) +
+      Date.now().toString(36)
+    );
   }
 }

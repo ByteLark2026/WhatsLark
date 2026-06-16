@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { WhatsAppService } from './whatsapp.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CurrentCompanyId } from '../common/decorators/current-user.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('WhatsApp Channels')
 @ApiBearerAuth()
@@ -12,22 +12,37 @@ export class WhatsAppController {
   constructor(private readonly whatsapp: WhatsAppService) {}
 
   @Get()
-  getChannels(@CurrentCompanyId() companyId: string) {
-    return this.whatsapp.getChannels(companyId);
+  getChannels(@CurrentUser('id') userId: string) {
+    return this.whatsapp.getChannels(userId);
   }
 
   @Post()
-  addChannel(@CurrentCompanyId() companyId: string, @Body() dto: any) {
-    return this.whatsapp.addChannel(companyId, dto);
+  addChannel(@CurrentUser('id') userId: string, @Body() dto: any) {
+    return this.whatsapp.addChannel(userId, dto);
+  }
+
+  @Patch(':id')
+  updateChannel(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() dto: any,
+  ) {
+    return this.whatsapp.updateChannel(userId, id, dto);
+  }
+
+  @Patch(':id/toggle')
+  toggleActive(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.whatsapp.toggleActive(userId, id);
   }
 
   @Delete(':id')
-  deleteChannel(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
-    return this.whatsapp.deleteChannel(companyId, id);
+  deleteChannel(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.whatsapp.deleteChannel(userId, id);
   }
 
   @Post(':id/send')
   sendMessage(
+    @CurrentUser('id') userId: string,
     @Param('id') channelId: string,
     @Body() body: { to: string; message: string },
   ) {
