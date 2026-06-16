@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   Plus, Phone, CheckCircle, XCircle, Copy, MoreHorizontal,
-  Loader2, Eye, EyeOff, RefreshCw, Wifi, WifiOff,
+  Loader2, Eye, EyeOff, RefreshCw, Wifi, WifiOff, Activity,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +40,10 @@ export default function ChannelsPage() {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
   const [verifyToken, setVerifyToken] = useState('');
+  const [diagTarget, setDiagTarget] = useState<WhatsAppChannel | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diagResult, setDiagResult] = useState<any>(null);
+  const [diagTestTo, setDiagTestTo] = useState('');
 
   const webhookUrl =
     typeof window !== 'undefined'
@@ -198,6 +202,23 @@ export default function ChannelsPage() {
     }
   };
 
+  const handleDiagnose = async (ch: WhatsAppChannel, testTo?: string) => {
+    setDiagTarget(ch);
+    setDiagnosing(true);
+    setDiagResult(null);
+    try {
+      const params = new URLSearchParams({ channel_id: ch.id });
+      if (testTo) params.set('to', testTo);
+      const res = await fetch(`/api/whatsapp/diagnose?${params}`);
+      const json = await res.json();
+      setDiagResult(json);
+    } catch (err: any) {
+      setDiagResult({ error: err.message });
+    } finally {
+      setDiagnosing(false);
+    }
+  };
+
   const copy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: `${label} copied` });
@@ -309,6 +330,10 @@ export default function ChannelsPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => openEdit(channel)}>
                             Edit channel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setDiagTarget(channel); setDiagResult(null); setDiagTestTo(''); }}>
+                            <Activity className="w-4 h-4 mr-2" />
+                            Diagnose / test send
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleToggle(channel)}
@@ -454,6 +479,123 @@ export default function ChannelsPage() {
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
               {editTarget ? 'Save changes' : 'Connect channel'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diagnose / Test Send Dialog */}
+      <Dialog open={!!diagTarget} onOpenChange={(open) => { if (!open) { setDiagTarget(null); setDiagResult(null); setDiagTestTo(''); } }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Diagnose Channel: {diagTarget?.name}</DialogTitle>
+            <DialogDescription>
+              Checks your Meta credentials and optionally sends a test message to confirm delivery.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Test phone (international format, e.g. 971XXXXXXXXX)"
+                value={diagTestTo}
+                onChange={(e) => setDiagTestTo(e.target.value)}
+              />
+              <Button
+                onClick={() => diagTarget && handleDiagnose(diagTarget, diagTestTo || undefined)}
+                disabled={diagnosing}
+              >
+                {diagnosing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                <span className="ml-2">Run</span>
+              </Button>
+            </div>
+
+            {diagResult && (
+              <div className="space-y-3 text-sm">
+                {/* Token check */}
+                {diagResult.checks?.token && (
+                  <div className={`rounded-md p-3 border ${diagResult.checks.token.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <div className="flex items-center gap-2 font-medium mb-1">
+                      {diagResult.checks.token.ok
+                        ? <CheckCircle className="w-4 h-4 text-green-600" />
+                        : <XCircle className="w-4 h-4 text-red-600" />}
+                      Access Token &amp; Phone Number ID
+                    </div>
+                    {diagResult.checks.token.ok ? (
+                      <div className="text-xs text-green-800 space-y-0.5">
+                        <p>Phone: <strong>{diagResult.checks.token.display_phone_number}</strong></p>
+                        <p>Name: {diagResult.checks.token.verified_name}</p>
+                        <p>Status: {diagResult.checks.token.status} | Quality: {diagResult.checks.token.quality_rating}</p>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-red-800 space-y-1">
+                        <p><strong>[{diagResult.checks.token.error_code}]</strong> {diagResult.checks.token.error_message}</p>
+                        {diagResult.checks.token.fix && <p className="italic">{diagResult.checks.token.fix}</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Schema check */}
+                {diagResult.checks?.schema_channel_id && (
+                  <div className={`rounded-md p-3 border ${diagResult.checks.schema_channel_id.ok ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                    <div className="flex items-center gap-2 font-medium mb-1">
+                      {diagResult.checks.schema_channel_id.ok
+                        ? <CheckCircle className="w-4 h-4 text-green-600" />
+                        : <XCircle className="w-4 h-4 text-yellow-600" />}
+                      Database Migration (messages.channel_id)
+                    </div>
+                    <p className="text-xs">{diagResult.checks.schema_channel_id.detail}</p>
+                    {diagResult.checks.schema_channel_id.fix && (
+                      <p className="text-xs italic mt-1">{diagResult.checks.schema_channel_id.fix}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Test send */}
+                {diagResult.checks?.test_send && (
+                  <div className={`rounded-md p-3 border ${diagResult.checks.test_send.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <div className="flex items-center gap-2 font-medium mb-1">
+                      {diagResult.checks.test_send.ok
+                        ? <CheckCircle className="w-4 h-4 text-green-600" />
+                        : <XCircle className="w-4 h-4 text-red-600" />}
+                      Test Message Send → {diagResult.checks.test_send.to}
+                    </div>
+                    {diagResult.checks.test_send.ok ? (
+                      <p className="text-xs text-green-800">Sent! Message ID: {diagResult.checks.test_send.message_id}</p>
+                    ) : (
+                      <div className="text-xs text-red-800 space-y-1">
+                        {diagResult.checks.test_send.phone_warning && (
+                          <p className="font-medium text-yellow-800 bg-yellow-50 rounded px-2 py-1">{diagResult.checks.test_send.phone_warning}</p>
+                        )}
+                        <p><strong>[{diagResult.checks.test_send.error_code}]</strong> {diagResult.checks.test_send.error_message}</p>
+                        {diagResult.checks.test_send.fix && <p className="italic">{diagResult.checks.test_send.fix}</p>}
+                        {diagResult.checks.test_send.skipped && <p className="text-muted-foreground">{diagResult.checks.test_send.skipped}</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {diagResult.error && (
+                  <div className="rounded-md p-3 border bg-red-50 border-red-200 text-xs text-red-800">
+                    {diagResult.error}
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  API version used: <code>{diagResult.api_version_used}</code>
+                </p>
+              </div>
+            )}
+
+            {!diagResult && !diagnosing && (
+              <p className="text-sm text-muted-foreground">
+                Click <strong>Run</strong> to check your credentials. Optionally enter a phone number (with country code, no +) to test-send a message.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDiagTarget(null); setDiagResult(null); setDiagTestTo(''); }}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

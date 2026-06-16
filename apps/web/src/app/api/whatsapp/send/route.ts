@@ -6,12 +6,23 @@ const adminSupabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+const API_VER = process.env.WHATSAPP_API_VERSION || 'v21.0';
+
+function normalizePhone(phone: string): string {
+  // Strip all non-digits
+  let p = phone.replace(/\D/g, '');
+  // If starts with 0 and is short (local format), we can't fix it — caller must use intl format
+  return p;
+}
+
 async function sendViaMeta(channel: {
   phone_number_id: string;
   access_token: string;
 }, to: string, body: string): Promise<{ wa_message_id?: string; error?: string }> {
+  const toNormalized = normalizePhone(to);
+
   const res = await fetch(
-    `https://graph.facebook.com/v19.0/${channel.phone_number_id}/messages`,
+    `https://graph.facebook.com/${API_VER}/${channel.phone_number_id}/messages`,
     {
       method: 'POST',
       headers: {
@@ -20,14 +31,25 @@ async function sendViaMeta(channel: {
       },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
-        to: to.replace(/\D/g, ''), // strip non-digits
+        to: toNormalized,
         type: 'text',
         text: { body, preview_url: false },
       }),
     },
   );
   const json = await res.json();
-  if (!res.ok) return { error: json.error?.message || 'Meta API error' };
+  if (!res.ok) {
+    const code = json.error?.code;
+    const msg = json.error?.message || 'Meta API error';
+    // Build a human-readable hint for common error codes
+    let hint = '';
+    if (code === 190) hint = ' [Invalid/expired access token]';
+    else if (code === 131047) hint = ' [24h window expired — use a template]';
+    else if (code === 131030) hint = ' [Number not whitelisted in test mode]';
+    else if (code === 100) hint = ` [Invalid phone "${toNormalized}" — needs country code, e.g. 971XXXXXXXXX]`;
+    else if (code === 131026) hint = ' [Message undeliverable to this number]';
+    return { error: `[${code}] ${msg}${hint}` };
+  }
   return { wa_message_id: json.messages?.[0]?.id };
 }
 
@@ -87,6 +109,14 @@ export async function POST(req: NextRequest) {
 
     if (!contact?.phone) {
       return NextResponse.json({ error: 'Contact has no phone number' }, { status: 400 });
+    }
+
+    // Warn if phone looks like local format (no country code)
+    const phoneDigits = contact.phone.replace(/\D/g, '');
+    if (phoneDigits.startsWith('0') || phoneDigits.length < 10) {
+      return NextResponse.json({
+        error: `Contact phone "${contact.phone}" appears to be in local format without a country code. WhatsApp requires international format (e.g. 971XXXXXXXXX for UAE, 91XXXXXXXXXX for India). Edit the contact and add the country code.`,
+      }, { status: 400 });
     }
 
     // Save message optimistically as 'sent'
