@@ -7,7 +7,7 @@ const CHANNEL_SELECT =
 
 @Injectable()
 export class WhatsAppService {
-  private readonly apiVersion = process.env.WHATSAPP_API_VERSION || 'v19.0';
+  private readonly apiVersion = process.env.WHATSAPP_API_VERSION || 'v21.0';
   private readonly baseUrl = process.env.WHATSAPP_API_URL || 'https://graph.facebook.com';
 
   constructor(private readonly supabase: SupabaseService) {}
@@ -51,13 +51,20 @@ export class WhatsAppService {
 
     // Validate credentials against Meta Graph API before storing
     try {
-      await axios.get(
-        `${this.baseUrl}/${this.apiVersion}/${dto.phone_number_id}`,
+      const metaRes = await axios.get(
+        `${this.baseUrl}/${this.apiVersion}/${dto.phone_number_id}?fields=id,display_phone_number,verified_name`,
         { headers: { Authorization: `Bearer ${dto.access_token}` } },
       );
-    } catch {
+    } catch (err: any) {
+      const metaError = err.response?.data?.error;
+      const code = metaError?.code;
+      const msg = metaError?.message || err.message;
+      let hint = '';
+      if (code === 190) hint = ' Your access token is invalid or expired. Generate a new one from Meta App → WhatsApp → API Setup.';
+      else if (code === 100) hint = ' The Phone Number ID is incorrect. Copy it from Meta App → WhatsApp → API Setup.';
+      else if (code === 10) hint = ' Permission error — make sure the token has whatsapp_business_messaging permission.';
       throw new BadRequestException(
-        'Invalid WhatsApp credentials — check your Access Token and Phone Number ID.',
+        `Meta API error [${code || 'unknown'}]: ${msg}.${hint}`,
       );
     }
 
@@ -114,12 +121,19 @@ export class WhatsAppService {
     if (dto.access_token || dto.phone_number_id) {
       try {
         await axios.get(
-          `${this.baseUrl}/${this.apiVersion}/${newPhoneNumberId}`,
+          `${this.baseUrl}/${this.apiVersion}/${newPhoneNumberId}?fields=id,display_phone_number,verified_name`,
           { headers: { Authorization: `Bearer ${newToken}` } },
         );
-      } catch {
+      } catch (err: any) {
+        const metaError = err.response?.data?.error;
+        const code = metaError?.code;
+        const msg = metaError?.message || err.message;
+        let hint = '';
+        if (code === 190) hint = ' Your access token is invalid or expired.';
+        else if (code === 100) hint = ' The Phone Number ID is incorrect.';
+        else if (code === 10) hint = ' Permission error — token needs whatsapp_business_messaging permission.';
         throw new BadRequestException(
-          'Invalid WhatsApp credentials — check your Access Token and Phone Number ID.',
+          `Meta API error [${code || 'unknown'}]: ${msg}.${hint}`,
         );
       }
     }
