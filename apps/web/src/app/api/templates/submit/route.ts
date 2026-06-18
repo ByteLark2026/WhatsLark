@@ -7,7 +7,7 @@ const adminSupabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-const GRAPH_VERSION = 'v19.0';
+const GRAPH_VERSION = process.env.WHATSAPP_API_VERSION || 'v21.0';
 
 interface ChannelCreds {
   business_account_id: string;
@@ -73,9 +73,17 @@ async function transformComponent(component: TemplateComponent, channel: Channel
         if (example) out.example = { header_text: example };
       } else if (format === 'LOCATION') {
         // No text/example required.
-      } else if (component.text) {
+      } else {
+        // IMAGE, VIDEO, DOCUMENT headers require a sample media upload
+        if (!component.text) {
+          throw new Error(
+            `Template header is ${format} but no sample media URL is provided. Edit the template and add a sample ${format.toLowerCase()} URL in the header.`,
+          );
+        }
         if (!channel.meta_app_id) {
-          throw new Error('This template has an image/video/document header. Add a Meta App ID in Channels → Edit to upload the sample media for review.');
+          throw new Error(
+            'This template has a media header. Add a Meta App ID in Channels → Edit to upload the sample media for review.',
+          );
         }
         const handle = await uploadMediaHandle(channel.meta_app_id, channel.access_token, component.text);
         out.example = { header_handle: [handle] };
