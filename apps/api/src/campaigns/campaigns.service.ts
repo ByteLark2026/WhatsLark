@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { SupabaseService } from '../common/supabase.service';
@@ -9,6 +9,18 @@ export class CampaignsService {
     private readonly supabase: SupabaseService,
     @InjectQueue('campaigns') private readonly campaignQueue: Queue,
   ) {}
+
+  async getCompanyId(userId: string): Promise<string> {
+    const { data, error } = await this.supabase.getAdminClient()
+      .from('company_users')
+      .select('company_id')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .limit(1)
+      .single();
+    if (error || !data) throw new ForbiddenException('No active company found for this user');
+    return data.company_id;
+  }
 
   async list(companyId: string, opts: { page?: number; limit?: number } = {}) {
     const { page = 1, limit = 20 } = opts;

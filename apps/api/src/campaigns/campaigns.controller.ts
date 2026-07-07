@@ -2,7 +2,7 @@ import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@ne
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CampaignsService } from './campaigns.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CurrentUser, CurrentCompanyId } from '../common/decorators/current-user.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Campaigns')
 @ApiBearerAuth()
@@ -12,41 +12,44 @@ export class CampaignsController {
   constructor(private readonly service: CampaignsService) {}
 
   @Get()
-  list(@CurrentCompanyId() companyId: string, @Query() q: any) {
+  async list(@CurrentUser('id') userId: string, @Query() q: any) {
+    const companyId = await this.service.getCompanyId(userId);
     return this.service.list(companyId, q);
   }
 
   @Get(':id')
-  get(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
+  async get(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    const companyId = await this.service.getCompanyId(userId);
     return this.service.get(companyId, id);
   }
 
   @Post()
-  create(
-    @CurrentCompanyId() companyId: string,
-    @CurrentUser('id') userId: string,
-    @Body() dto: any,
-  ) {
+  async create(@CurrentUser('id') userId: string, @Body() dto: any) {
+    const companyId = await this.service.getCompanyId(userId);
     return this.service.create(companyId, userId, dto);
   }
 
   @Post(':id/launch')
-  launch(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
+  async launch(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    const companyId = await this.service.getCompanyId(userId);
     return this.service.launch(companyId, id);
   }
 
   @Patch(':id/pause')
-  pause(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
+  async pause(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    const companyId = await this.service.getCompanyId(userId);
     return this.service.pause(companyId, id);
   }
 
   @Get(':id/recipients')
-  recipients(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
+  async recipients(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    const companyId = await this.service.getCompanyId(userId);
     return this.service.getRecipients(companyId, id);
   }
 
   @Get(':id/stats')
-  stats(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
+  async stats(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    const companyId = await this.service.getCompanyId(userId);
     return this.service.getStats(companyId, id);
   }
 }
