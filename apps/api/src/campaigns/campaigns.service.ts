@@ -78,7 +78,7 @@ export class CampaignsService {
       const recipients = dto.contact_ids.map(cid => ({
         campaign_id: campaign.id,
         contact_id: cid,
-        status: 'sent',
+        status: 'pending',
       }));
       await this.supabase.getAdminClient().from('campaign_recipients').insert(recipients);
     }

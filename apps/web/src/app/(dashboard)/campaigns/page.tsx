@@ -68,6 +68,7 @@ export default function CampaignsPage() {
   const [creating, setCreating] = useState(false);
   const [editTarget, setEditTarget] = useState<Campaign | null>(null);
   const [viewTarget, setViewTarget] = useState<Campaign | null>(null);
+  const [viewErrors, setViewErrors] = useState<{ phone: string; error: string }[]>([]);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -371,7 +372,22 @@ export default function CampaignsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setViewTarget(campaign)}>View details</DropdownMenuItem>
+                            <DropdownMenuItem onClick={async () => {
+              setViewTarget(campaign);
+              setViewErrors([]);
+              const supabase = createClient();
+              const { data } = await supabase
+                .from('campaign_recipients')
+                .select('error_message, contacts(phone, name)')
+                .eq('campaign_id', campaign.id)
+                .eq('status', 'failed');
+              if (data?.length) {
+                setViewErrors(data.map((r: any) => ({
+                  phone: r.contacts?.phone || '?',
+                  error: r.error_message || 'Unknown error',
+                })));
+              }
+            }}>View details</DropdownMenuItem>
                             {campaign.status === 'draft' && (
                               <DropdownMenuItem onClick={() => openEditDialog(campaign)}>Edit</DropdownMenuItem>
                             )}
@@ -595,7 +611,7 @@ export default function CampaignsPage() {
       </Dialog>
 
       {/* View Details Dialog */}
-      <Dialog open={!!viewTarget} onOpenChange={(open) => !open && setViewTarget(null)}>
+      <Dialog open={!!viewTarget} onOpenChange={(open) => { if (!open) { setViewTarget(null); setViewErrors([]); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{viewTarget?.name}</DialogTitle>
@@ -645,7 +661,22 @@ export default function CampaignsPage() {
                   </div>
                 ))}
               </div>
+              {viewErrors.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-destructive flex items-center gap-1">
+                <XCircle className="w-4 h-4" /> Failed sends ({viewErrors.length})
+              </p>
+              <div className="border border-destructive/30 rounded-lg divide-y max-h-40 overflow-y-auto">
+                {viewErrors.map((e, i) => (
+                  <div key={i} className="px-3 py-2 text-xs">
+                    <span className="font-medium">{e.phone}</span>
+                    <span className="text-muted-foreground ml-2">{e.error}</span>
+                  </div>
+                ))}
+              </div>
             </div>
+          )}
+        </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setViewTarget(null)}>Close</Button>

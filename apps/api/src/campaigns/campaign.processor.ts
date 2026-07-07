@@ -15,7 +15,7 @@ export class CampaignProcessor {
 
   @Process('send-campaign')
   async processCampaign(job: Job<{ campaignId: string; companyId: string }>) {
-    const { campaignId, companyId } = job.data;
+    const { campaignId } = job.data;
     this.logger.log(`Processing campaign ${campaignId}`);
 
     // Load campaign + template
@@ -33,14 +33,18 @@ export class CampaignProcessor {
     // Load pending recipients
     const { data: recipients } = await this.supabase.getAdminClient()
       .from('campaign_recipients')
-      .select('*, contacts (phone)')
+      .select('*, contacts (phone, name)')
       .eq('campaign_id', campaignId)
-      .eq('status', 'sent'); // not yet actually sent
+      .eq('status', 'pending');
 
     if (!recipients?.length) {
       await this.finishCampaign(campaignId);
       return;
     }
+
+    const template = campaign.message_templates;
+    // Build template components from the template definition (sample values as placeholders)
+    const components = this.buildTemplateComponents(template?.components || []);
 
     let sentCount = 0;
     let failedCount = 0;
@@ -58,16 +62,24 @@ export class CampaignProcessor {
         break;
       }
 
-      try {
-        const phone = recipient.contacts.phone;
-        const template = campaign.message_templates;
+      const phone = (recipient.contacts?.phone || '').replace(/\D/g, '');
+      if (!phone || phone.length < 10 || phone.startsWith('0')) {
+        this.logger.warn(`Skipping recipient ${recipient.id}: invalid phone "${recipient.contacts?.phone}"`);
+        await this.supabase.getAdminClient()
+          .from('campaign_recipients')
+          .update({ status: 'failed', error_message: `Invalid phone number: ${recipient.contacts?.phone}. Must be international format (e.g. 971508705487).`, failed_at: new Date().toISOString() })
+          .eq('id', recipient.id);
+        failedCount++;
+        continue;
+      }
 
+      try {
         const waMessageId = await this.whatsapp.sendTemplateMessage(
           campaign.channel_id,
           phone,
           template.name,
           template.language,
-          [], // template components — customise per campaign
+          components,
         );
 
         await this.supabase.getAdminClient()
@@ -84,21 +96,71 @@ export class CampaignProcessor {
         // Throttle: 1 message per second to respect Meta rate limits
         await new Promise(r => setTimeout(r, 1000));
       } catch (err: any) {
-        this.logger.error(`Failed to send to ${recipient.contacts?.phone}: ${err.message}`);
+        const errorMsg = err.response?.data?.error?.message || err.message || 'Unknown error';
+        const errorCode = err.response?.data?.error?.code;
+        const fullError = errorCode ? `[${errorCode}] ${errorMsg}` : errorMsg;
+        this.logger.error(`Failed to send to ${phone}: ${fullError}`);
         await this.supabase.getAdminClient()
           .from('campaign_recipients')
-          .update({ status: 'failed', error_message: err.message, failed_at: new Date().toISOString() })
+          .update({ status: 'failed', error_message: fullError, failed_at: new Date().toISOString() })
           .eq('id', recipient.id);
         failedCount++;
       }
     }
 
+    // Update campaign stats
+    const { data: currentStats } = await this.supabase.getAdminClient()
+      .from('campaigns')
+      .select('sent_count, failed_count')
+      .eq('id', campaignId)
+      .single();
+
     await this.supabase.getAdminClient()
       .from('campaigns')
-      .update({ sent_count: sentCount, failed_count: failedCount })
+      .update({
+        sent_count: (currentStats?.sent_count || 0) + sentCount,
+        failed_count: (currentStats?.failed_count || 0) + failedCount,
+      })
       .eq('id', campaignId);
 
     await this.finishCampaign(campaignId);
+  }
+
+  // Build WhatsApp template component parameters from template definition
+  private buildTemplateComponents(templateComponents: any[]): any[] {
+    const result: any[] = [];
+
+    for (const comp of templateComponents) {
+      if (comp.type === 'BODY' && comp.text) {
+        const vars = [...comp.text.matchAll(/\{\{(\w+)\}\}/g)];
+        if (vars.length > 0) {
+          result.push({
+            type: 'body',
+            parameters: vars.map((_m, i) => ({
+              type: 'text',
+              text: comp.example?.body_text?.[0]?.[i] || `Value${i + 1}`,
+            })),
+          });
+        }
+      }
+      if (comp.type === 'HEADER') {
+        const format = comp.format || 'TEXT';
+        if (format === 'TEXT' && comp.text) {
+          const vars = [...comp.text.matchAll(/\{\{(\w+)\}\}/g)];
+          if (vars.length > 0) {
+            result.push({
+              type: 'header',
+              parameters: vars.map((_m, i) => ({
+                type: 'text',
+                text: comp.example?.header_text?.[i] || `Value${i + 1}`,
+              })),
+            });
+          }
+        }
+      }
+    }
+
+    return result;
   }
 
   private async finishCampaign(campaignId: string) {
