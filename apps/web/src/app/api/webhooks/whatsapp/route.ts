@@ -36,11 +36,11 @@ export async function GET(req: NextRequest) {
 
 // ── POST — incoming events from Meta ─────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  // Meta requires a 200 within 5 seconds — process async after responding
   const body = await req.json().catch(() => null);
   console.log('[webhook/whatsapp] POST received, object:', body?.object, 'entries:', body?.entry?.length);
   if (body) {
-    processWebhookBody(body).catch((err) =>
+    // Must await — Vercel serverless terminates after response, so fire-and-forget never completes
+    await processWebhookBody(body).catch((err) =>
       console.error('[webhook/whatsapp] processing error:', err),
     );
   }
