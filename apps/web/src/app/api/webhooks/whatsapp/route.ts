@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   // Meta requires a 200 within 5 seconds — process async after responding
   const body = await req.json().catch(() => null);
+  console.log('[webhook/whatsapp] POST received, object:', body?.object, 'entries:', body?.entry?.length);
   if (body) {
     processWebhookBody(body).catch((err) =>
       console.error('[webhook/whatsapp] processing error:', err),
@@ -101,6 +102,7 @@ async function handleIncomingMessage(
   msg: any,
   waContacts: any[],
 ) {
+  console.log('[webhook] handleIncomingMessage companyId:', companyId, 'channelId:', channelId, 'from:', msg.from, 'type:', msg.type);
   // WhatsApp sends phone without '+'; we normalise to E.164 format
   const phone = `+${msg.from}`;
   const waContact = waContacts.find((c: any) => c.wa_id === msg.from);
@@ -163,7 +165,8 @@ async function handleIncomingMessage(
     .maybeSingle();
 
   if (!existing) {
-    await adminSupabase
+    console.log('[webhook] inserting message wa_message_id:', msg.id);
+    const { error: insertErr } = await adminSupabase
       .from('messages')
       .insert({
         conversation_id: conversation.id,
@@ -178,6 +181,10 @@ async function handleIncomingMessage(
         is_note: false,
         metadata: msg,
       });
+    if (insertErr) console.error('[webhook] insert error:', insertErr.message);
+    else console.log('[webhook] message inserted OK');
+  } else {
+    console.log('[webhook] duplicate message, skipping:', msg.id);
   }
 
   // Update conversation — increment unread_count atomically, reopen if pending
