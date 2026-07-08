@@ -103,8 +103,8 @@ async function handleIncomingMessage(
   waContacts: any[],
 ) {
   console.log('[webhook] handleIncomingMessage companyId:', companyId, 'channelId:', channelId, 'from:', msg.from, 'type:', msg.type);
-  // WhatsApp sends phone without '+'; we normalise to E.164 format
-  const phone = `+${msg.from}`;
+  // Meta sends phone without '+'. Store as-is to match contacts created via the UI (e.g. 971508705487)
+  const phone = msg.from;
   const waContact = waContacts.find((c: any) => c.wa_id === msg.from);
   const contactName = waContact?.profile?.name || phone;
 
