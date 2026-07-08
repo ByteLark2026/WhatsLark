@@ -15,7 +15,6 @@ const adminSupabase = createClient(
 
 // Store last 5 raw webhook payloads in memory (resets on cold start)
 const recentPayloads: { ts: string; body: any }[] = [];
-export const lastPayloads = recentPayloads; // exported so whatsapp/route.ts can push
 
 export async function GET(req: NextRequest) {
   if (req.nextUrl.searchParams.get('secret') !== DEBUG_SECRET) {
