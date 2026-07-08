@@ -142,11 +142,12 @@ export class CampaignProcessor {
             type: 'body',
             parameters: vars.map((_m, i) => ({
               type: 'text',
-              text: comp.example?.body_text?.[0]?.[i] || `Value${i + 1}`,
+              text: comp.example?.body_text?.[0]?.[i] || `Sample${i + 1}`,
             })),
           });
         }
       }
+
       if (comp.type === 'HEADER') {
         const format = comp.format || 'TEXT';
         if (format === 'TEXT' && comp.text) {
@@ -156,8 +157,23 @@ export class CampaignProcessor {
               type: 'header',
               parameters: vars.map((_m, i) => ({
                 type: 'text',
-                text: comp.example?.header_text?.[i] || `Value${i + 1}`,
+                text: comp.example?.header_text?.[i] || `Sample${i + 1}`,
               })),
+            });
+          }
+        }
+      }
+
+      // Dynamic URL buttons require a BUTTON component with the suffix parameter
+      if (comp.type === 'BUTTONS') {
+        for (let idx = 0; idx < (comp.buttons || []).length; idx++) {
+          const btn = comp.buttons[idx];
+          if (btn.type === 'URL' && btn.url && /\{\{/.test(btn.url)) {
+            result.push({
+              type: 'button',
+              sub_type: 'url',
+              index: idx,
+              parameters: [{ type: 'text', text: btn.example?.[0] || 'track' }],
             });
           }
         }
