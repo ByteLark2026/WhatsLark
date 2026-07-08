@@ -78,7 +78,7 @@ export class CampaignsService {
       const recipients = dto.contact_ids.map(cid => ({
         campaign_id: campaign.id,
         contact_id: cid,
-        status: 'pending',
+        status: 'sent', // valid enum value; wa_message_id=null means not yet processed
       }));
       await this.supabase.getAdminClient().from('campaign_recipients').insert(recipients);
     }

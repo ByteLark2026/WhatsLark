@@ -30,12 +30,14 @@ export class CampaignProcessor {
       return;
     }
 
-    // Load pending recipients
+    // Load unprocessed recipients: status='sent' and wa_message_id IS NULL
+    // (status enum has no 'pending' value; wa_message_id=null means not yet sent to WhatsApp)
     const { data: recipients } = await this.supabase.getAdminClient()
       .from('campaign_recipients')
       .select('*, contacts (phone, name)')
       .eq('campaign_id', campaignId)
-      .eq('status', 'pending');
+      .eq('status', 'sent')
+      .is('wa_message_id', null);
 
     if (!recipients?.length) {
       await this.finishCampaign(campaignId);
