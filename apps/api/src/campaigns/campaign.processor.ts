@@ -45,8 +45,10 @@ export class CampaignProcessor {
     }
 
     const template = campaign.message_templates;
+    this.logger.log(`Template raw: name="${template?.name}" lang="${template?.language}" components=${JSON.stringify(template?.components)}`);
     // Build template components from the template definition (sample values as placeholders)
     const components = this.buildTemplateComponents(template?.components || []);
+    this.logger.log(`Template components built: ${JSON.stringify(components)}`);
 
     let sentCount = 0;
     let failedCount = 0;
