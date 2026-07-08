@@ -155,11 +155,17 @@ async function handleIncomingMessage(
 
   const { type, content, mediaUrl } = extractContent(msg);
 
-  // Upsert message — deduplicates by wa_message_id if webhook fires twice
-  await adminSupabase
+  // Deduplicate — wa_message_id has no unique constraint yet, so check manually
+  const { data: existing } = await adminSupabase
     .from('messages')
-    .upsert(
-      {
+    .select('id')
+    .eq('wa_message_id', msg.id)
+    .maybeSingle();
+
+  if (!existing) {
+    await adminSupabase
+      .from('messages')
+      .insert({
         conversation_id: conversation.id,
         company_id: companyId,
         channel_id: channelId,
@@ -171,9 +177,8 @@ async function handleIncomingMessage(
         wa_message_id: msg.id,
         is_note: false,
         metadata: msg,
-      },
-      { onConflict: 'wa_message_id', ignoreDuplicates: true },
-    );
+      });
+  }
 
   // Update conversation — increment unread_count atomically, reopen if pending
   await adminSupabase
