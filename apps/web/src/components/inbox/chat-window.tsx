@@ -201,7 +201,34 @@ export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
                     <span className="text-xs font-medium">Internal note</span>
                   </div>
                 )}
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                {msg.media_url && msg.type === 'image' ? (
+                  <a href={`/api/media?id=${encodeURIComponent(msg.media_url)}&channel_id=${encodeURIComponent(conversation.channel_id)}`} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={`/api/media?id=${encodeURIComponent(msg.media_url)}&channel_id=${encodeURIComponent(conversation.channel_id)}`}
+                      alt={msg.content || 'Image'}
+                      className="max-w-[240px] rounded-lg cursor-pointer hover:opacity-90"
+                      loading="lazy"
+                    />
+                    {msg.content && <p className="text-xs mt-1 opacity-80">{msg.content}</p>}
+                  </a>
+                ) : msg.media_url && msg.type === 'video' ? (
+                  <video
+                    src={`/api/media?id=${encodeURIComponent(msg.media_url)}&channel_id=${encodeURIComponent(conversation.channel_id)}`}
+                    controls
+                    className="max-w-[240px] rounded-lg"
+                  />
+                ) : msg.media_url && (msg.type === 'document' || msg.type === 'audio') ? (
+                  <a
+                    href={`/api/media?id=${encodeURIComponent(msg.media_url)}&channel_id=${encodeURIComponent(conversation.channel_id)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 underline text-sm"
+                  >
+                    📎 {msg.content || (msg.type === 'audio' ? 'Voice message' : 'File')}
+                  </a>
+                ) : (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                )}
                 <div className={cn('flex items-center gap-1 mt-1', isOut ? 'justify-end' : 'justify-start')}>
                   <span className={cn('text-[10px]', isOut ? 'text-white/70' : 'text-muted-foreground')}>
                     {formatRelativeTime(msg.created_at)}
