@@ -182,7 +182,7 @@ async function handleIncomingMessage(
     if (insertErr) console.error('[webhook] insert error:', insertErr.message);
     else {
       console.log('[webhook] message inserted OK');
-      // Fire automations after insert (non-blocking — don't let failures break the webhook)
+      // Fire automations after insert (non-blocking)
       executeAutomations({
         companyId,
         channelId,
@@ -192,6 +192,17 @@ async function handleIncomingMessage(
         accessToken: access_token,
         phoneNumberId: phone_number_id,
       }).catch((err) => console.error('[webhook] automation error:', err));
+
+      // AI auto-reply (non-blocking — only fires if AI Bot enabled in settings)
+      executeAiAutoReply({
+        companyId,
+        channelId,
+        conversationId: conversation.id,
+        contactPhone: msg.from,
+        incomingMessage: type === 'text' ? content : '',
+        accessToken: access_token,
+        phoneNumberId: phone_number_id,
+      }).catch((err) => console.error('[webhook] ai auto-reply error:', err));
     }
   } else {
     console.log('[webhook] duplicate message, skipping:', msg.id);
@@ -461,6 +472,122 @@ function parseAutomationDuration(str: string): number {
   if (unit.startsWith('minute')) return n * 60000;
   if (unit.startsWith('hour')) return n * 3600000;
   return n;
+}
+
+// ── AI Auto-reply ─────────────────────────────────────────────────────────────
+async function executeAiAutoReply(ctx: {
+  companyId: string;
+  channelId: string;
+  conversationId: string;
+  contactPhone: string;
+  incomingMessage: string;
+  accessToken: string;
+  phoneNumberId: string;
+}) {
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!openaiKey) return; // not configured
+
+  // Load AI settings
+  const { data: settings } = await adminSupabase
+    .from('ai_settings')
+    .select('is_enabled, auto_reply, handover_keyword, system_prompt, model')
+    .eq('company_id', ctx.companyId)
+    .maybeSingle();
+
+  if (!settings?.is_enabled || !settings?.auto_reply) return;
+
+  // Handover keyword: stop bot if customer asked for human
+  const handoverKw = (settings.handover_keyword || 'agent').toLowerCase();
+  if (ctx.incomingMessage.toLowerCase().includes(handoverKw)) {
+    console.log('[ai] handover keyword detected, skipping auto-reply');
+    return;
+  }
+
+  // Get last 10 messages for context
+  const { data: history } = await adminSupabase
+    .from('messages')
+    .select('direction, content')
+    .eq('conversation_id', ctx.conversationId)
+    .eq('is_note', false)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  // Get knowledge base
+  const { data: kb } = await adminSupabase
+    .from('knowledge_base')
+    .select('question, answer')
+    .eq('company_id', ctx.companyId)
+    .eq('is_active', true);
+
+  const kbText = kb?.map((k: any) => `Q: ${k.question}\nA: ${k.answer}`).join('\n\n') || '';
+  const systemPrompt = `${settings.system_prompt || 'You are a helpful customer support assistant. Be friendly and concise.'}${kbText ? `\n\nKnowledge Base:\n${kbText}` : ''}`;
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...(history || []).reverse().map((m: any) => ({
+      role: m.direction === 'inbound' ? 'user' : 'assistant',
+      content: m.content || '',
+    })),
+  ];
+
+  // Call OpenAI chat completions
+  const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: settings.model || 'gpt-4o-mini',
+      messages,
+      max_tokens: 400,
+      temperature: 0.7,
+    }),
+  });
+
+  if (!aiRes.ok) {
+    const err = await aiRes.json().catch(() => ({}));
+    console.error('[ai] OpenAI error:', err?.error?.message);
+    return;
+  }
+
+  const aiJson = await aiRes.json();
+  const replyText: string = aiJson.choices?.[0]?.message?.content?.trim();
+  if (!replyText) return;
+
+  console.log('[ai] sending auto-reply:', replyText.substring(0, 80));
+
+  // Send via WhatsApp
+  const toPhone = ctx.contactPhone.replace(/\D/g, '');
+  const GRAPH_V = process.env.WHATSAPP_API_VERSION || 'v21.0';
+  const sendRes = await fetch(`https://graph.facebook.com/${GRAPH_V}/${ctx.phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: toPhone,
+      type: 'text',
+      text: { body: replyText },
+    }),
+  });
+  const sendJson = await sendRes.json();
+  const waId = sendJson.messages?.[0]?.id;
+
+  // Store in DB so it appears in inbox
+  if (waId) {
+    await adminSupabase.from('messages').insert({
+      conversation_id: ctx.conversationId,
+      company_id: ctx.companyId,
+      channel_id: ctx.channelId,
+      direction: 'outbound',
+      type: 'text',
+      content: replyText,
+      status: 'sent',
+      wa_message_id: waId,
+      is_note: false,
+    });
+    await adminSupabase
+      .from('conversations')
+      .update({ last_message_at: new Date().toISOString(), last_message_preview: replyText.substring(0, 100) })
+      .eq('id', ctx.conversationId);
+  }
 }
 
 // ── Template approval / rejection callbacks ───────────────────────────────────
