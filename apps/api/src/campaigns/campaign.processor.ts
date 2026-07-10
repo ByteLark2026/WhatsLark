@@ -45,9 +45,10 @@ export class CampaignProcessor {
     }
 
     const template = campaign.message_templates;
+    const templateVariables: Record<string, string> = campaign.template_variables || {};
     this.logger.log(`Template raw: name="${template?.name}" lang="${template?.language}" components=${JSON.stringify(template?.components)}`);
-    // Build template components from the template definition (sample values as placeholders)
-    const components = this.buildTemplateComponents(template?.components || []);
+    this.logger.log(`Template variables: ${JSON.stringify(templateVariables)}`);
+    const components = this.buildTemplateComponents(template?.components || [], templateVariables);
     this.logger.log(`Template components built: ${JSON.stringify(components)}`);
 
     let sentCount = 0;
@@ -130,8 +131,9 @@ export class CampaignProcessor {
     await this.finishCampaign(campaignId);
   }
 
-  // Build WhatsApp template component parameters from template definition
-  private buildTemplateComponents(templateComponents: any[]): any[] {
+  // Build WhatsApp template component parameters.
+  // templateVariables: { "body_1": "value", "body_2": "value", "header_1": "value", "button_0": "value" }
+  private buildTemplateComponents(templateComponents: any[], templateVariables: Record<string, string> = {}): any[] {
     const result: any[] = [];
 
     for (const comp of templateComponents) {
@@ -142,7 +144,10 @@ export class CampaignProcessor {
             type: 'body',
             parameters: vars.map((_m, i) => ({
               type: 'text',
-              text: comp.example?.body_text?.[0]?.[i] || `Sample${i + 1}`,
+              // Use stored variable value, fall back to template example, then generic sample
+              text: templateVariables[`body_${i + 1}`]
+                || comp.example?.body_text?.[0]?.[i]
+                || `Sample${i + 1}`,
             })),
           });
         }
@@ -157,7 +162,9 @@ export class CampaignProcessor {
               type: 'header',
               parameters: vars.map((_m, i) => ({
                 type: 'text',
-                text: comp.example?.header_text?.[i] || `Sample${i + 1}`,
+                text: templateVariables[`header_${i + 1}`]
+                  || comp.example?.header_text?.[i]
+                  || `Sample${i + 1}`,
               })),
             });
           }
@@ -173,7 +180,7 @@ export class CampaignProcessor {
               type: 'button',
               sub_type: 'url',
               index: idx,
-              parameters: [{ type: 'text', text: btn.example?.[0] || 'track' }],
+              parameters: [{ type: 'text', text: templateVariables[`button_${idx}`] || btn.example?.[0] || 'track' }],
             });
           }
         }
