@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Patch, Delete, Param, Body, Query,
-  UseGuards, Request, Headers, Logger,
+  UseGuards, Request, Headers, Logger, UsePipes, ValidationPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { EcommerceService } from './ecommerce.service';
@@ -93,6 +93,7 @@ export class EcommerceController {
 
   // ── Webhooks from stores (no auth — verified by secret) ───────────────────────
   @Post('webhook/:connectionId/woocommerce')
+  @UsePipes(new ValidationPipe({ transform: false, whitelist: false, forbidNonWhitelisted: false }))
   async woocommerceWebhook(
     @Param('connectionId') connectionId: string,
     @Headers('x-wc-webhook-topic') topic: string,
@@ -117,6 +118,7 @@ export class EcommerceController {
   }
 
   @Post('webhook/:connectionId/shopify')
+  @UsePipes(new ValidationPipe({ transform: false, whitelist: false, forbidNonWhitelisted: false }))
   async shopifyWebhook(
     @Param('connectionId') connectionId: string,
     @Headers('x-shopify-topic') topic: string,
