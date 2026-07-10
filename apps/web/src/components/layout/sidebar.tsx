@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, MessageSquare, Users, TrendingUp, Megaphone,
   FileText, Zap, Bot, Phone, UserCog, Settings, LogOut, ChevronDown,
-  Shield, BarChart2, Code2, LifeBuoy, ShoppingBag, PieChart, Calendar,
+  Shield, BarChart2, Code2, LifeBuoy, ShoppingBag, PieChart, Calendar, FormInput,
+  Briefcase, Target, FolderKanban, Activity, Award,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -27,6 +28,12 @@ const navItems = [
   { href: '/analytics', label: 'Analytics', icon: BarChart2 },
   { href: '/reports', label: 'Reports', icon: PieChart },
   { href: '/campaigns/schedule', label: 'Schedule', icon: Calendar },
+  { href: '/forms', label: 'Forms', icon: FormInput },
+  { href: '/crm', label: 'CRM', icon: Briefcase },
+  { href: '/pipeline', label: 'Pipeline', icon: Target },
+  { href: '/leads/scoring', label: 'Lead Scoring', icon: Activity },
+  { href: '/projects', label: 'Projects', icon: FolderKanban },
+  { href: '/team/performance', label: 'Performance', icon: Award },
   { href: '/widget-builder', label: 'Widget Builder', icon: Code2 },
   { href: '/ai-bot', label: 'AI Bot', icon: Bot },
   { href: '/channels', label: 'Channels', icon: Phone },

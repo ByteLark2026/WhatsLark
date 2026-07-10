@@ -21,6 +21,11 @@ export class LeadsController {
     return this.service.getByStage(companyId);
   }
 
+  @Get('forecast')
+  forecast(@CurrentCompanyId() companyId: string) {
+    return this.service.getForecast(companyId);
+  }
+
   @Get(':id')
   get(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
     return this.service.get(companyId, id);

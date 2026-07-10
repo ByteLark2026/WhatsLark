@@ -22,6 +22,10 @@ import { SupportTicketsModule } from './support-tickets/support-tickets.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SupabaseModule } from './common/supabase.module';
 import { EcommerceModule } from './ecommerce/ecommerce.module';
+import { FormsModule } from './forms/forms.module';
+import { ActivitiesModule } from './activities/activities.module';
+import { ProjectsModule } from './projects/projects.module';
+import { ScoringModule } from './scoring/scoring.module';
 
 @Module({
   controllers: [AppController],
@@ -61,6 +65,10 @@ import { EcommerceModule } from './ecommerce/ecommerce.module';
     SupportTicketsModule,
     RealtimeModule,
     EcommerceModule,
+    FormsModule,
+    ActivitiesModule,
+    ProjectsModule,
+    ScoringModule,
   ],
 })
 export class AppModule {}
