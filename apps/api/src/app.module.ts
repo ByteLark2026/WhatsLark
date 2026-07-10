@@ -21,6 +21,7 @@ import { SuperAdminModule } from './super-admin/super-admin.module';
 import { SupportTicketsModule } from './support-tickets/support-tickets.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SupabaseModule } from './common/supabase.module';
+import { EcommerceModule } from './ecommerce/ecommerce.module';
 
 @Module({
   controllers: [AppController],
@@ -59,6 +60,7 @@ import { SupabaseModule } from './common/supabase.module';
     SuperAdminModule,
     SupportTicketsModule,
     RealtimeModule,
+    EcommerceModule,
   ],
 })
 export class AppModule {}
