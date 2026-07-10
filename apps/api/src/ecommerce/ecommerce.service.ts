@@ -285,12 +285,21 @@ export class EcommerceService {
     return { ok: true, event_type: mapped.event_type, order_id: mapped.order_id };
   }
 
+  private normalizePhone(raw: string | null | undefined): string | null {
+    if (!raw) return null;
+    let digits = raw.replace(/\D/g, '');
+    // Strip leading zero and prepend UAE country code if looks local
+    if (digits.startsWith('0') && digits.length <= 10) digits = '971' + digits.slice(1);
+    // Must be at least 10 digits to be valid
+    return digits.length >= 10 ? digits : null;
+  }
+
   private mapWooEvent(topic: string, p: any) {
     const billing = p.billing || {};
-    const phone = billing.phone?.replace(/\D/g, '') || null;
+    const phone = this.normalizePhone(billing.phone);
     const base = {
       order_id: p.id,
-      order_number: p.number,
+      order_number: p.number ?? p.id,
       name: `${billing.first_name || ''} ${billing.last_name || ''}`.trim(),
       phone,
       email: billing.email,
@@ -308,7 +317,7 @@ export class EcommerceService {
   }
 
   private mapShopifyEvent(topic: string, p: any) {
-    const phone = p.phone?.replace(/\D/g, '') || p.billing_address?.phone?.replace(/\D/g, '') || p.shipping_address?.phone?.replace(/\D/g, '') || null;
+    const phone = this.normalizePhone(p.phone || p.billing_address?.phone || p.shipping_address?.phone);
     const base = {
       order_id: p.id,
       order_number: p.order_number,
