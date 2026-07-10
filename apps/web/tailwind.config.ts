@@ -9,6 +9,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-lexend-deca)', 'sans-serif'],
+      },
       colors: {
         // shadcn/ui CSS variable tokens
         background: 'hsl(var(--background))',

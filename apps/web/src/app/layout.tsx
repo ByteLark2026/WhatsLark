@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Lexend_Deca } from 'next/font/google';
 import './globals.css';
 
-const lexendDeca = Lexend_Deca({ subsets: ['latin'], weight: '500' });
+const lexendDeca = Lexend_Deca({ subsets: ['latin'], weight: '500', variable: '--font-lexend-deca' });
 
 export const metadata: Metadata = {
   title: 'WhatsLark — WhatsApp CRM for Sales, Support & Automation',
@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={lexendDeca.className}>{children}</body>
+    <html lang="en" className={lexendDeca.variable} suppressHydrationWarning>
+      <body>{children}</body>
     </html>
   );
 }
