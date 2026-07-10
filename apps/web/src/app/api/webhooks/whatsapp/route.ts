@@ -68,7 +68,7 @@ async function processWebhookBody(body: any) {
 
       const { data: channel } = await adminSupabase
         .from('whatsapp_channels')
-        .select('id, company_id, is_active')
+        .select('id, company_id, is_active, access_token, phone_number_id')
         .eq('phone_number_id', phoneNumberId)
         .maybeSingle();
 
@@ -87,9 +87,7 @@ async function processWebhookBody(body: any) {
       // Incoming messages
       const waContacts: any[] = value.contacts || [];
       for (const msg of value.messages || []) {
-        await handleIncomingMessage(channel.company_id, channel.id, msg, waContacts).catch(
-          console.error,
-        );
+        await handleIncomingMessage(channel, msg, waContacts).catch(console.error);
       }
     }
   }
@@ -97,11 +95,11 @@ async function processWebhookBody(body: any) {
 
 // ── Incoming message ──────────────────────────────────────────────────────────
 async function handleIncomingMessage(
-  companyId: string,
-  channelId: string,
+  channel: { id: string; company_id: string; is_active: boolean; access_token: string; phone_number_id: string },
   msg: any,
   waContacts: any[],
 ) {
+  const { id: channelId, company_id: companyId, access_token, phone_number_id } = channel;
   console.log('[webhook] handleIncomingMessage companyId:', companyId, 'channelId:', channelId, 'from:', msg.from, 'type:', msg.type);
   // Meta sends phone without '+'. Store as-is to match contacts created via the UI (e.g. 971508705487)
   const phone = msg.from;
@@ -182,7 +180,19 @@ async function handleIncomingMessage(
         metadata: msg,
       });
     if (insertErr) console.error('[webhook] insert error:', insertErr.message);
-    else console.log('[webhook] message inserted OK');
+    else {
+      console.log('[webhook] message inserted OK');
+      // Fire automations after insert (non-blocking — don't let failures break the webhook)
+      executeAutomations({
+        companyId,
+        channelId,
+        conversationId: conversation.id,
+        contactPhone: msg.from,
+        messageText: type === 'text' ? content : '',
+        accessToken: access_token,
+        phoneNumberId: phone_number_id,
+      }).catch((err) => console.error('[webhook] automation error:', err));
+    }
   } else {
     console.log('[webhook] duplicate message, skipping:', msg.id);
   }
@@ -293,6 +303,164 @@ function extractContent(msg: any): { type: string; content: string; mediaUrl?: s
     default:
       return { type: 'text', content: `[${msg.type ?? 'Unknown'}]` };
   }
+}
+
+// ── Automation execution ──────────────────────────────────────────────────────
+const GRAPH_VERSION_AUTO = process.env.WHATSAPP_API_VERSION || 'v21.0';
+
+async function executeAutomations(ctx: {
+  companyId: string;
+  channelId: string;
+  conversationId: string;
+  contactPhone: string;
+  messageText: string;
+  accessToken: string;
+  phoneNumberId: string;
+}) {
+  const { data: rules } = await adminSupabase
+    .from('automation_rules')
+    .select('*')
+    .eq('company_id', ctx.companyId)
+    .eq('trigger', 'message_received')
+    .eq('is_active', true);
+
+  if (!rules?.length) return;
+
+  for (const rule of rules) {
+    const config = rule.trigger_config || {};
+    // Keyword filter: skip if keywords set and none match
+    if (config.keywords?.length) {
+      const lowerMsg = ctx.messageText.toLowerCase();
+      const match = config.keywords.some((kw: string) => lowerMsg.includes(kw.toLowerCase()));
+      if (!match) continue;
+    }
+    console.log('[automation] executing rule:', rule.id, rule.name);
+    await executeFlow(rule, ctx).catch((err) => console.error('[automation] flow error:', rule.id, err));
+  }
+}
+
+async function executeFlow(rule: any, ctx: {
+  companyId: string; channelId: string; conversationId: string;
+  contactPhone: string; accessToken: string; phoneNumberId: string;
+}) {
+  const nodes: any[] = rule.trigger_config?.nodes || [];
+  const edges: any[] = rule.trigger_config?.edges || [];
+  if (!nodes.length) return;
+
+  const nodeMap = new Map(nodes.map((n: any) => [n.id, n]));
+  // Only follow the first (default) edge from each source; condition yes/no ignored for now
+  const nextNode = new Map<string, string>();
+  for (const edge of edges) {
+    if (!nextNode.has(edge.source)) nextNode.set(edge.source, edge.target);
+  }
+
+  let currentId = 'start';
+  const visited = new Set<string>();
+
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    const node = nodeMap.get(currentId);
+    if (!node || node.type === 'end') break;
+    if (node.type !== 'start') {
+      await executeFlowNode(node, ctx);
+    }
+    currentId = nextNode.get(currentId) || '';
+  }
+}
+
+async function executeFlowNode(node: any, ctx: {
+  companyId: string; channelId: string; conversationId: string;
+  contactPhone: string; accessToken: string; phoneNumberId: string;
+}) {
+  const config = node.data?.config || {};
+  const toPhone = ctx.contactPhone.replace(/\D/g, '');
+
+  switch (node.type) {
+    case 'sendMessage': {
+      if (!config.message) break;
+      const res = await fetch(
+        `https://graph.facebook.com/${GRAPH_VERSION_AUTO}/${ctx.phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: toPhone,
+            type: 'text',
+            text: { body: config.message },
+          }),
+        },
+      );
+      const json = await res.json();
+      const waId = json.messages?.[0]?.id;
+      console.log('[automation] sendMessage sent, wa_id:', waId);
+      // Store the outbound message so it appears in the inbox
+      if (waId) {
+        await adminSupabase.from('messages').insert({
+          conversation_id: ctx.conversationId,
+          company_id: ctx.companyId,
+          channel_id: ctx.channelId,
+          direction: 'outbound',
+          type: 'text',
+          content: config.message,
+          status: 'sent',
+          wa_message_id: waId,
+          is_note: false,
+        });
+      }
+      break;
+    }
+
+    case 'template': {
+      // config.template is the template name or id stored in the node
+      if (!config.template) break;
+      const { data: tpl } = await adminSupabase
+        .from('message_templates')
+        .select('name, language')
+        .eq('company_id', ctx.companyId)
+        .eq('name', config.template)
+        .eq('status', 'approved')
+        .maybeSingle();
+      if (!tpl) { console.warn('[automation] template not found:', config.template); break; }
+      const res = await fetch(
+        `https://graph.facebook.com/${GRAPH_VERSION_AUTO}/${ctx.phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: toPhone,
+            type: 'template',
+            template: { name: tpl.name, language: { code: tpl.language }, components: [] },
+          }),
+        },
+      );
+      const json = await res.json();
+      console.log('[automation] template sent:', json.messages?.[0]?.id);
+      break;
+    }
+
+    case 'delay': {
+      const ms = parseAutomationDuration(config.duration || '');
+      // Cap at 10s to avoid Vercel function timeout
+      if (ms > 0 && ms <= 10000) await new Promise((r) => setTimeout(r, ms));
+      break;
+    }
+
+    default:
+      console.log('[automation] unhandled node type:', node.type);
+  }
+}
+
+function parseAutomationDuration(str: string): number {
+  const m = str.match(/(\d+)\s*(second|minute|hour|ms)/i);
+  if (!m) return 0;
+  const n = parseInt(m[1], 10);
+  const unit = m[2].toLowerCase();
+  if (unit.startsWith('second')) return n * 1000;
+  if (unit.startsWith('minute')) return n * 60000;
+  if (unit.startsWith('hour')) return n * 3600000;
+  return n;
 }
 
 // ── Template approval / rejection callbacks ───────────────────────────────────
