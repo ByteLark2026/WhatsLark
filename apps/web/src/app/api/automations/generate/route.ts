@@ -13,11 +13,22 @@ Available triggers:
 - new_conversation: fires when a new conversation starts
 
 Available node types and their configs:
-- sendMessage: sends a text reply → config: { message: "your text" }
-- template: sends an approved WhatsApp template → config: { template: "template_name" }
-- delay: waits before continuing → config: { duration: "30 seconds" | "2 minutes" etc }
-- condition: branches the flow → config: { condition: "description of condition" }
-- end: terminates the flow
+- sendMessage → config: { message: "text, use {{var_name}} for variables" }
+- askQuestion → config: { question: "What is your name?", variable: "user_name" }  (saves reply to variable for later)
+- template → config: { template: "approved_template_name" }
+- listMsg → config: { header: "Choose", body: "Pick from list", buttonText: "View options", options: "Opt 1\nOpt 2\nOpt 3" }
+- media → config: { mediaType: "image"|"video"|"document"|"audio", mediaUrl: "https://...", caption: "optional" }
+- location → config: { locationName: "Our Store", address: "123 Main St", lat: "24.7136", lng: "46.6753" }
+- condition → config: { conditionType: "message_contains"|"message_equals"|"variable_equals"|"always_true", conditionValue: "keyword or var=val" }
+  (condition node has TWO source handles: "yes" for left, "no" for right — edges must specify sourceHandle)
+- delay → config: { delayValue: "5", delayUnit: "seconds"|"minutes"|"hours" }
+- variable → config: { varName: "my_var", varValue: "{{message}} or static text" }
+- assign → config: { assignTo: "agent@company.com" }
+- webhook → config: { method: "POST"|"GET"|"PUT", url: "https://...", body: '{"key":"{{message}}"}' }
+- read → marks conversation as read (no config needed)
+- addGroup → config: { group: "VIP" }
+- update → config: { field: "name"|"email"|"notes", value: "{{message}} or static" }
+- end → terminates the flow (no config)
 
 When generating a flow, output ONLY valid JSON inside a \`\`\`json block like this:
 
@@ -40,15 +51,20 @@ When generating a flow, output ONLY valid JSON inside a \`\`\`json block like th
 }
 \`\`\`
 
+For condition node edges, use sourceHandle to specify the branch:
+{"id": "e_yes", "source": "c1", "sourceHandle": "yes", "target": "n_yes", ...}
+{"id": "e_no", "source": "c1", "sourceHandle": "no", "target": "n_no", ...}
+
 Then after the code block, write a short 1-2 sentence summary of what this flow does.
 
 Rules:
-- Position nodes vertically: start at y=50, each next node y += 130
-- Give each non-start/end node a unique id like n1, n2, n3
-- Keep end node id as end_1 (not "end" to avoid JS reserved word issues)
+- Position nodes vertically: start at y=50, each next node y += 130. For condition branches use x offset (yes left x=100, no right x=400).
+- Give each non-start/end node a unique id like n1, n2, n3, c1, d1 etc.
+- Keep end node id as end_1 (or end_2, end_3 for multiple end nodes)
 - For keyword_matched trigger always put the keywords in trigger_config.keywords array
 - Be conversational and helpful. Ask clarifying questions if the request is unclear.
-- Keep messages natural and WhatsApp-friendly (short, friendly tone).`;
+- Keep messages natural and WhatsApp-friendly (short, friendly tone).
+- Use {{message}} to refer to the incoming message text. Use {{variable_name}} for stored variables.`;
 
 export async function POST(req: NextRequest) {
   try {

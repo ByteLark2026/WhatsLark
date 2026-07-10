@@ -319,52 +319,53 @@ function extractContent(msg: any): { type: string; content: string; mediaUrl?: s
 // ── Automation execution ──────────────────────────────────────────────────────
 const GRAPH_VERSION_AUTO = process.env.WHATSAPP_API_VERSION || 'v21.0';
 
-async function executeAutomations(ctx: {
-  companyId: string;
-  channelId: string;
-  conversationId: string;
-  contactPhone: string;
+type FlowCtx = {
+  companyId: string; channelId: string; conversationId: string;
+  contactPhone: string; accessToken: string; phoneNumberId: string;
   messageText: string;
-  accessToken: string;
-  phoneNumberId: string;
+  vars: Record<string, string>;
+};
+
+async function executeAutomations(ctx: {
+  companyId: string; channelId: string; conversationId: string;
+  contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
 }) {
   const { data: rules } = await adminSupabase
     .from('automation_rules')
     .select('*')
     .eq('company_id', ctx.companyId)
-    .eq('trigger', 'message_received')
+    .in('trigger', ['message_received', 'keyword_matched'])
     .eq('is_active', true);
 
   if (!rules?.length) return;
 
   for (const rule of rules) {
     const config = rule.trigger_config || {};
-    // Keyword filter: skip if keywords set and none match
-    if (config.keywords?.length) {
-      const lowerMsg = ctx.messageText.toLowerCase();
+    const lowerMsg = ctx.messageText.toLowerCase();
+
+    if (rule.trigger === 'keyword_matched') {
+      if (!config.keywords?.length) continue;
+      const match = config.keywords.some((kw: string) => lowerMsg.includes(kw.toLowerCase()));
+      if (!match) continue;
+    } else if (rule.trigger === 'message_received' && config.keywords?.length) {
+      // legacy: keyword filter on message_received rules
       const match = config.keywords.some((kw: string) => lowerMsg.includes(kw.toLowerCase()));
       if (!match) continue;
     }
+
     console.log('[automation] executing rule:', rule.id, rule.name);
-    await executeFlow(rule, ctx).catch((err) => console.error('[automation] flow error:', rule.id, err));
+    await executeFlow(rule, { ...ctx, vars: {} }).catch((err) =>
+      console.error('[automation] flow error:', rule.id, err),
+    );
   }
 }
 
-async function executeFlow(rule: any, ctx: {
-  companyId: string; channelId: string; conversationId: string;
-  contactPhone: string; accessToken: string; phoneNumberId: string;
-}) {
+async function executeFlow(rule: any, ctx: FlowCtx) {
   const nodes: any[] = rule.trigger_config?.nodes || [];
   const edges: any[] = rule.trigger_config?.edges || [];
   if (!nodes.length) return;
 
   const nodeMap = new Map(nodes.map((n: any) => [n.id, n]));
-  // Only follow the first (default) edge from each source; condition yes/no ignored for now
-  const nextNode = new Map<string, string>();
-  for (const edge of edges) {
-    if (!nextNode.has(edge.source)) nextNode.set(edge.source, edge.target);
-  }
-
   let currentId = 'start';
   const visited = new Set<string>();
 
@@ -372,66 +373,80 @@ async function executeFlow(rule: any, ctx: {
     visited.add(currentId);
     const node = nodeMap.get(currentId);
     if (!node || node.type === 'end') break;
+
+    if (node.type === 'condition') {
+      const branch = await evaluateCondition(node, ctx);
+      const next = edges.find((e: any) => e.source === currentId && e.sourceHandle === (branch ? 'yes' : 'no'))
+        || edges.find((e: any) => e.source === currentId);
+      currentId = next?.target || '';
+      continue;
+    }
+
     if (node.type !== 'start') {
       await executeFlowNode(node, ctx);
     }
-    currentId = nextNode.get(currentId) || '';
+
+    const next = edges.find((e: any) => e.source === currentId);
+    currentId = next?.target || '';
   }
 }
 
-async function executeFlowNode(node: any, ctx: {
-  companyId: string; channelId: string; conversationId: string;
-  contactPhone: string; accessToken: string; phoneNumberId: string;
-}) {
+function evaluateCondition(node: any, ctx: FlowCtx): boolean {
+  const config = node.data?.config || {};
+  const ct: string = config.conditionType || 'message_contains';
+  const cv: string = config.conditionValue || '';
+  const msg = ctx.messageText.toLowerCase();
+
+  if (ct === 'always_true') return true;
+  if (ct === 'message_contains') return msg.includes(cv.toLowerCase());
+  if (ct === 'message_equals') return msg === cv.toLowerCase();
+  if (ct === 'variable_equals') {
+    const [varName, varVal] = cv.split('=').map((s: string) => s.trim());
+    return ctx.vars[varName] === varVal;
+  }
+  return false;
+}
+
+function interpolate(text: string, ctx: FlowCtx): string {
+  return text.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+    if (k === 'message') return ctx.messageText;
+    return ctx.vars[k] ?? `{{${k}}}`;
+  });
+}
+
+async function executeFlowNode(node: any, ctx: FlowCtx) {
   const config = node.data?.config || {};
   const toPhone = ctx.contactPhone.replace(/\D/g, '');
 
   switch (node.type) {
     case 'sendMessage': {
       if (!config.message) break;
+      const body = interpolate(config.message, ctx);
       const res = await fetch(
         `https://graph.facebook.com/${GRAPH_VERSION_AUTO}/${ctx.phoneNumberId}/messages`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            to: toPhone,
-            type: 'text',
-            text: { body: config.message },
-          }),
+          body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'text', text: { body } }),
         },
       );
       const json = await res.json();
       const waId = json.messages?.[0]?.id;
       console.log('[automation] sendMessage sent, wa_id:', waId);
-      // Store the outbound message so it appears in the inbox
       if (waId) {
         await adminSupabase.from('messages').insert({
-          conversation_id: ctx.conversationId,
-          company_id: ctx.companyId,
-          channel_id: ctx.channelId,
-          direction: 'outbound',
-          type: 'text',
-          content: config.message,
-          status: 'sent',
-          wa_message_id: waId,
-          is_note: false,
+          conversation_id: ctx.conversationId, company_id: ctx.companyId, channel_id: ctx.channelId,
+          direction: 'outbound', type: 'text', content: body, status: 'sent', wa_message_id: waId, is_note: false,
         });
       }
       break;
     }
 
     case 'template': {
-      // config.template is the template name or id stored in the node
       if (!config.template) break;
       const { data: tpl } = await adminSupabase
-        .from('message_templates')
-        .select('name, language')
-        .eq('company_id', ctx.companyId)
-        .eq('name', config.template)
-        .eq('status', 'approved')
-        .maybeSingle();
+        .from('message_templates').select('name, language')
+        .eq('company_id', ctx.companyId).eq('name', config.template).eq('status', 'approved').maybeSingle();
       if (!tpl) { console.warn('[automation] template not found:', config.template); break; }
       const res = await fetch(
         `https://graph.facebook.com/${GRAPH_VERSION_AUTO}/${ctx.phoneNumberId}/messages`,
@@ -439,9 +454,7 @@ async function executeFlowNode(node: any, ctx: {
           method: 'POST',
           headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            to: toPhone,
-            type: 'template',
+            messaging_product: 'whatsapp', to: toPhone, type: 'template',
             template: { name: tpl.name, language: { code: tpl.language }, components: [] },
           }),
         },
@@ -451,10 +464,104 @@ async function executeFlowNode(node: any, ctx: {
       break;
     }
 
+    case 'media': {
+      const mediaType = config.mediaType || 'image';
+      const url = config.mediaUrl;
+      if (!url) break;
+      const res = await fetch(
+        `https://graph.facebook.com/${GRAPH_VERSION_AUTO}/${ctx.phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp', to: toPhone, type: mediaType,
+            [mediaType]: { link: url, ...(config.caption ? { caption: config.caption } : {}) },
+          }),
+        },
+      );
+      const json = await res.json();
+      console.log('[automation] media sent:', json.messages?.[0]?.id);
+      break;
+    }
+
     case 'delay': {
-      const ms = parseAutomationDuration(config.duration || '');
-      // Cap at 10s to avoid Vercel function timeout
+      // Support both old {duration:"5 seconds"} and new {delayValue:5, delayUnit:"seconds"}
+      let ms = 0;
+      if (config.delayValue && config.delayUnit) {
+        const n = parseInt(config.delayValue, 10);
+        if (config.delayUnit === 'seconds') ms = n * 1000;
+        else if (config.delayUnit === 'minutes') ms = n * 60000;
+        else if (config.delayUnit === 'hours') ms = n * 3600000;
+      } else {
+        ms = parseAutomationDuration(config.duration || '');
+      }
       if (ms > 0 && ms <= 10000) await new Promise((r) => setTimeout(r, ms));
+      break;
+    }
+
+    case 'variable': {
+      const k = config.varName;
+      const v = config.varValue || '';
+      if (k) ctx.vars[k] = interpolate(v, ctx);
+      break;
+    }
+
+    case 'webhook': {
+      if (!config.url) break;
+      const method = config.method || 'POST';
+      const bodyStr = config.body ? interpolate(config.body, ctx) : undefined;
+      await fetch(config.url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        ...(bodyStr && method !== 'GET' ? { body: bodyStr } : {}),
+      }).catch((err) => console.error('[automation] webhook error:', err));
+      break;
+    }
+
+    case 'read': {
+      await adminSupabase.from('conversations').update({ unread_count: 0 }).eq('id', ctx.conversationId);
+      break;
+    }
+
+    case 'addGroup': {
+      if (!config.group) break;
+      // Store as a tag on the contact (uses notes or a tags column if it exists)
+      console.log('[automation] addGroup tag:', config.group, '(implement tag storage per your schema)');
+      break;
+    }
+
+    case 'update': {
+      if (!config.field) break;
+      const val = interpolate(config.value || '', ctx);
+      const allowed = ['name', 'email', 'notes'];
+      if (allowed.includes(config.field)) {
+        await adminSupabase.from('contacts')
+          .update({ [config.field]: val })
+          .eq('company_id', ctx.companyId)
+          .eq('phone', ctx.contactPhone);
+      }
+      break;
+    }
+
+    case 'askQuestion': {
+      // Send the question — wait for next message handled by next automation run
+      if (!config.question) break;
+      const res = await fetch(
+        `https://graph.facebook.com/${GRAPH_VERSION_AUTO}/${ctx.phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'text', text: { body: config.question } }),
+        },
+      );
+      const json = await res.json();
+      if (json.messages?.[0]?.id) {
+        await adminSupabase.from('messages').insert({
+          conversation_id: ctx.conversationId, company_id: ctx.companyId, channel_id: ctx.channelId,
+          direction: 'outbound', type: 'text', content: config.question,
+          status: 'sent', wa_message_id: json.messages[0].id, is_note: false,
+        });
+      }
       break;
     }
 
