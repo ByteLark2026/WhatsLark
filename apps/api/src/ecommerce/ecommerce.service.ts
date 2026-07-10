@@ -307,6 +307,7 @@ export class EcommerceService {
       currency: p.currency,
       items: (p.line_items || []).map((i: any) => ({ name: i.name, qty: i.quantity, price: i.total })),
       tracking_url: p.meta_data?.find((m: any) => m.key === '_tracking_url')?.value || null,
+      payment_method: p.payment_method_title || p.payment_method || null,
     };
     if (topic.includes('created')) return { ...base, event_type: 'order_placed' as const };
     if (topic.includes('processing')) return { ...base, event_type: 'order_confirmed' as const };
@@ -352,13 +353,11 @@ export class EcommerceService {
     const to = mapped.phone;
 
     // Build message based on event type
-    const otp = mapped.event_type === 'order_placed' ? Math.floor(100000 + Math.random() * 900000).toString() : null;
+    const otp = null;
     const itemsSummary = (mapped.items || []).slice(0, 3).map((i: any) => `• ${i.name} x${i.qty}`).join('\n');
 
     const messages: Record<string, string> = {
-      order_placed: otp
-        ? `🛍️ Order #${mapped.order_number} confirmed!\n\nHello ${mapped.name || 'there'},\n\nYour order has been placed.\n\nItems:\n${itemsSummary}\n\nTotal: ${mapped.currency} ${mapped.total}\n\n🔐 Your OTP: *${otp}*\n\nThank you for shopping with us!`
-        : `🛍️ Order #${mapped.order_number} placed!\n\nHello ${mapped.name || 'there'},\n\nItems:\n${itemsSummary}\n\nTotal: ${mapped.currency} ${mapped.total}`,
+      order_placed: `🛍️ Order #${mapped.order_number} confirmed!\n\nHello ${mapped.name || 'there'},\n\nItems:\n${itemsSummary}\n\nTotal: ${mapped.currency} ${mapped.total}\nPayment: ${mapped.payment_method || 'N/A'}\n\nThank you for shopping with us! 🙏`,
       order_confirmed: `✅ Order #${mapped.order_number} confirmed and being processed!\n\nHello ${mapped.name || 'there'}, we're preparing your order.\n\nTotal: ${mapped.currency} ${mapped.total}`,
       order_shipped: `🚚 Order #${mapped.order_number} shipped!\n\nHello ${mapped.name || 'there'}, your order is on the way!\n\n${mapped.tracking_url ? `Track: ${mapped.tracking_url}` : 'You will receive a tracking link shortly.'}`,
       order_delivered: `✅ Order #${mapped.order_number} delivered!\n\nHello ${mapped.name || 'there'}, your order has been delivered.\n\nWe hope you enjoy it! Feel free to reach out if you need anything.`,
