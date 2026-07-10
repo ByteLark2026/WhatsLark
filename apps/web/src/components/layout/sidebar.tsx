@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, MessageSquare, Users, TrendingUp, Megaphone,
   FileText, Zap, Bot, Phone, UserCog, Settings, LogOut, ChevronDown,
-  Shield, BarChart2, Code2, LifeBuoy, ShoppingBag,
+  Shield, BarChart2, Code2, LifeBuoy, ShoppingBag, PieChart, Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -25,6 +25,8 @@ const navItems = [
   { href: '/automations', label: 'Automations', icon: Zap },
   { href: '/ecommerce', label: 'E-commerce', icon: ShoppingBag },
   { href: '/analytics', label: 'Analytics', icon: BarChart2 },
+  { href: '/reports', label: 'Reports', icon: PieChart },
+  { href: '/campaigns/schedule', label: 'Schedule', icon: Calendar },
   { href: '/widget-builder', label: 'Widget Builder', icon: Code2 },
   { href: '/ai-bot', label: 'AI Bot', icon: Bot },
   { href: '/channels', label: 'Channels', icon: Phone },

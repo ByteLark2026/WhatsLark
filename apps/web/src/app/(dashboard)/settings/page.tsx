@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import {
   Save, Loader2, Building2, Clock, MessageSquare,
-  Plus, Trash2, CheckCircle, XCircle, Copy, Eye, EyeOff, ExternalLink, Webhook,
+  Plus, Trash2, CheckCircle, XCircle, Copy, Eye, EyeOff, ExternalLink, Webhook, Zap, ChevronRight,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -363,6 +364,27 @@ export default function SettingsPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Quick shortcut links */}
+        <div className="pt-2 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">More settings</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {[
+              { href: '/settings/quick-replies', label: 'Quick Replies', desc: 'Saved message shortcuts for inbox', icon: Zap },
+              { href: '/settings/integrations', label: 'Integrations', desc: 'WooCommerce & Shopify stores', icon: ExternalLink },
+            ].map((item) => (
+              <Link key={item.href} href={item.href}
+                className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                <item.icon className="w-4 h-4 text-muted-foreground shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </Link>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ── Connect dialog ─────────────────────────────────────────────────── */}

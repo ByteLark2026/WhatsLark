@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Search, Upload, MoreHorizontal, Phone, Mail, Tag } from 'lucide-react';
+import { Plus, Search, Upload, MoreHorizontal, Phone, Mail, Tag, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -231,6 +231,9 @@ export default function ContactsPage() {
             />
             <Button variant="outline" size="sm" disabled={importing} onClick={() => fileInputRef.current?.click()}>
               <Upload className="w-4 h-4 mr-2" />{importing ? 'Importing…' : 'Import CSV'}
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/contacts/segments"><Users className="w-4 h-4 mr-2" />Segments</Link>
             </Button>
             <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" />Add contact</Button>
           </>
