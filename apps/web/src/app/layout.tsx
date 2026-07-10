@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Lexend_Deca } from 'next/font/google';
 import './globals.css';
 
-const lexendDeca = Lexend_Deca({ subsets: ['latin'], weight: '500', variable: '--font-lexend-deca' });
+const lexendDeca = Lexend_Deca({ subsets: ['latin'], weight: '300', variable: '--font-lexend-deca' });
 
 export const metadata: Metadata = {
   title: 'WhatsLark — WhatsApp CRM for Sales, Support & Automation',
