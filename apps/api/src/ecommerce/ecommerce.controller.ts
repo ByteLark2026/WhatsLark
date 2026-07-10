@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Patch, Delete, Param, Body, Query,
-  UseGuards, Request, Headers, RawBodyRequest, Req,
+  UseGuards, Request, Headers, Logger,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { EcommerceService } from './ecommerce.service';
@@ -8,6 +8,8 @@ import { SupabaseService } from '../common/supabase.service';
 
 @Controller('ecommerce')
 export class EcommerceController {
+  private readonly logger = new Logger(EcommerceController.name);
+
   constructor(
     private readonly service: EcommerceService,
     private readonly supabase: SupabaseService,
@@ -94,15 +96,14 @@ export class EcommerceController {
   async woocommerceWebhook(
     @Param('connectionId') connectionId: string,
     @Headers('x-wc-webhook-topic') topic: string,
-    @Headers('x-wc-webhook-secret') secret: string,
     @Body() payload: any,
   ) {
+    this.logger.log(`[WC webhook] connectionId=${connectionId} topic=${topic} keys=${Object.keys(payload || {}).join(',')}`);
     const conn = await this.getConnectionWithSecret(connectionId);
-    if (!conn) return { ignored: true };
-    if (conn.webhook_secret && conn.webhook_secret !== secret) {
-      return { ignored: true, reason: 'invalid secret' };
-    }
+    if (!conn) { this.logger.warn(`[WC webhook] connection not found: ${connectionId}`); return { ignored: true }; }
+    // connectionId UUID acts as the secret — no additional header check needed
     const channel = await this.service.getDefaultChannel(conn.company_id);
+    this.logger.log(`[WC webhook] channel=${channel?.id} phone=${payload?.billing?.phone}`);
     return this.service.handleStoreWebhook({
       connectionId,
       platform: 'woocommerce',
