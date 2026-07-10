@@ -377,6 +377,11 @@ export class EcommerceService {
     const json = await res.json();
     const waId = json.messages?.[0]?.id;
 
+    if (!res.ok || !waId) {
+      console.error(`[ecommerce] Meta API error for ${to}: status=${res.status} body=${JSON.stringify(json)}`);
+      return;
+    }
+
     // Update order event as sent
     await this.db()
       .from('ecommerce_order_events')
