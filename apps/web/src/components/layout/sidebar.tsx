@@ -6,7 +6,7 @@ import {
   LayoutDashboard, MessageSquare, Users, TrendingUp, Megaphone,
   FileText, Zap, Bot, Phone, UserCog, Settings, LogOut, ChevronDown,
   Shield, BarChart2, Code2, LifeBuoy, ShoppingBag, PieChart, Calendar, FormInput,
-  Briefcase, Target, FolderKanban, Activity, Award,
+  Briefcase, Target, FolderKanban, Activity, Award, Receipt, FileCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -41,6 +41,13 @@ const navSections = [
       { href: '/campaigns/schedule', label: 'Schedule', icon: Calendar },
       { href: '/templates', label: 'Templates', icon: FileText },
       { href: '/forms', label: 'Forms', icon: FormInput },
+    ],
+  },
+  {
+    label: 'Finance',
+    items: [
+      { href: '/invoices', label: 'Invoices', icon: Receipt },
+      { href: '/quotes', label: 'Quotations', icon: FileCheck },
     ],
   },
   {

@@ -26,6 +26,8 @@ import { FormsModule } from './forms/forms.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { ProjectsModule } from './projects/projects.module';
 import { ScoringModule } from './scoring/scoring.module';
+import { InvoicesModule } from './invoices/invoices.module';
+import { QuotationsModule } from './quotations/quotations.module';
 
 @Module({
   controllers: [AppController],
@@ -69,6 +71,8 @@ import { ScoringModule } from './scoring/scoring.module';
     ActivitiesModule,
     ProjectsModule,
     ScoringModule,
+    InvoicesModule,
+    QuotationsModule,
   ],
 })
 export class AppModule {}
