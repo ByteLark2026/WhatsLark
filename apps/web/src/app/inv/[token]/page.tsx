@@ -16,8 +16,9 @@ const STATUS_COLORS: Record<string, string> = {
   draft: '#6b7280', sent: '#2563eb', paid: '#16a34a', overdue: '#dc2626', cancelled: '#9ca3af',
 };
 
-export default async function PublicInvoicePage({ params }: { params: { token: string } }) {
-  const inv = await getInvoice(params.token);
+export default async function PublicInvoicePage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const inv = await getInvoice(token);
   if (!inv) return notFound();
 
   const subtotal = (inv.line_items || []).reduce((s: number, i: any) => s + i.qty * i.unit_price, 0);
