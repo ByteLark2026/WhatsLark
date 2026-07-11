@@ -1,13 +1,22 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CurrentCompanyId } from '../common/decorators/current-user.decorator';
 import { QuotationsService } from './quotations.service';
+import { SupabaseService } from '../common/supabase.service';
 
 @Controller('quotations')
 export class QuotationsController {
-  constructor(private readonly service: QuotationsService) {}
+  constructor(
+    private readonly service: QuotationsService,
+    private readonly supabase: SupabaseService,
+  ) {}
 
-  // Public — no auth
+  private async getCompanyId(userId: string): Promise<string> {
+    const { data } = await this.supabase.getAdminClient()
+      .from('company_users').select('company_id').eq('user_id', userId).eq('is_active', true).limit(1).single();
+    return data?.company_id;
+  }
+
+  // Public — no auth (MUST be before :id)
   @Get('public/:token')
   getPublic(@Param('token') token: string) {
     return this.service.getByToken(token);
@@ -15,61 +24,71 @@ export class QuotationsController {
 
   @Get('stats')
   @UseGuards(JwtAuthGuard)
-  stats(@CurrentCompanyId() companyId: string) {
+  async stats(@Request() req: any) {
+    const companyId = await this.getCompanyId(req.user.id);
     return this.service.getStats(companyId);
   }
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  list(@CurrentCompanyId() companyId: string, @Query() q: any) {
+  async list(@Request() req: any, @Query() q: any) {
+    const companyId = await this.getCompanyId(req.user.id);
     return this.service.list(companyId, { status: q.status, page: q.page ? +q.page : 1, limit: q.limit ? +q.limit : 50 });
   }
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  create(@CurrentCompanyId() companyId: string, @Request() req: any, @Body() dto: any) {
+  async create(@Request() req: any, @Body() dto: any) {
+    const companyId = await this.getCompanyId(req.user.id);
     return this.service.create(companyId, req.user.id, dto);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  get(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
+  async get(@Request() req: any, @Param('id') id: string) {
+    const companyId = await this.getCompanyId(req.user.id);
     return this.service.get(companyId, id);
   }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
-  update(@CurrentCompanyId() companyId: string, @Param('id') id: string, @Body() dto: any) {
+  async update(@Request() req: any, @Param('id') id: string, @Body() dto: any) {
+    const companyId = await this.getCompanyId(req.user.id);
     return this.service.update(companyId, id, dto);
   }
 
   @Patch(':id/send')
   @UseGuards(JwtAuthGuard)
-  send(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
+  async send(@Request() req: any, @Param('id') id: string) {
+    const companyId = await this.getCompanyId(req.user.id);
     return this.service.send(companyId, id);
   }
 
   @Patch(':id/accept')
   @UseGuards(JwtAuthGuard)
-  accept(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
+  async accept(@Request() req: any, @Param('id') id: string) {
+    const companyId = await this.getCompanyId(req.user.id);
     return this.service.accept(companyId, id);
   }
 
   @Patch(':id/reject')
   @UseGuards(JwtAuthGuard)
-  reject(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
+  async reject(@Request() req: any, @Param('id') id: string) {
+    const companyId = await this.getCompanyId(req.user.id);
     return this.service.reject(companyId, id);
   }
 
   @Post(':id/convert')
   @UseGuards(JwtAuthGuard)
-  convert(@CurrentCompanyId() companyId: string, @Param('id') id: string, @Request() req: any) {
+  async convert(@Request() req: any, @Param('id') id: string) {
+    const companyId = await this.getCompanyId(req.user.id);
     return this.service.convertToInvoice(companyId, req.user.id, id);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
-  delete(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
+  async delete(@Request() req: any, @Param('id') id: string) {
+    const companyId = await this.getCompanyId(req.user.id);
     return this.service.delete(companyId, id);
   }
 }
