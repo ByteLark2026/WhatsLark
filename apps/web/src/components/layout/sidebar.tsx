@@ -16,30 +16,60 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/inbox', label: 'Inbox', icon: MessageSquare },
-  { href: '/contacts', label: 'Contacts', icon: Users },
-  { href: '/leads', label: 'Leads', icon: TrendingUp },
-  { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
-  { href: '/templates', label: 'Templates', icon: FileText },
-  { href: '/automations', label: 'Automations', icon: Zap },
-  { href: '/ecommerce', label: 'E-commerce', icon: ShoppingBag },
-  { href: '/analytics', label: 'Analytics', icon: BarChart2 },
-  { href: '/reports', label: 'Reports', icon: PieChart },
-  { href: '/campaigns/schedule', label: 'Schedule', icon: Calendar },
-  { href: '/forms', label: 'Forms', icon: FormInput },
-  { href: '/crm', label: 'CRM', icon: Briefcase },
-  { href: '/pipeline', label: 'Pipeline', icon: Target },
-  { href: '/leads/scoring', label: 'Lead Scoring', icon: Activity },
-  { href: '/projects', label: 'Projects', icon: FolderKanban },
-  { href: '/team/performance', label: 'Performance', icon: Award },
-  { href: '/widget-builder', label: 'Widget Builder', icon: Code2 },
-  { href: '/ai-bot', label: 'AI Bot', icon: Bot },
-  { href: '/channels', label: 'Channels', icon: Phone },
-  { href: '/team', label: 'Team', icon: UserCog },
-  { href: '/support', label: 'Support', icon: LifeBuoy },
-  { href: '/settings', label: 'Settings', icon: Settings },
+const navSections = [
+  {
+    label: null,
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/inbox', label: 'Inbox', icon: MessageSquare },
+    ],
+  },
+  {
+    label: 'Sales & CRM',
+    items: [
+      { href: '/contacts', label: 'Contacts', icon: Users },
+      { href: '/leads', label: 'Leads', icon: TrendingUp },
+      { href: '/leads/scoring', label: 'Lead Scoring', icon: Activity },
+      { href: '/pipeline', label: 'Pipeline', icon: Target },
+      { href: '/crm', label: 'CRM', icon: Briefcase },
+    ],
+  },
+  {
+    label: 'Marketing',
+    items: [
+      { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
+      { href: '/campaigns/schedule', label: 'Schedule', icon: Calendar },
+      { href: '/templates', label: 'Templates', icon: FileText },
+      { href: '/forms', label: 'Forms', icon: FormInput },
+    ],
+  },
+  {
+    label: 'Work',
+    items: [
+      { href: '/projects', label: 'Projects', icon: FolderKanban },
+      { href: '/automations', label: 'Automations', icon: Zap },
+      { href: '/ecommerce', label: 'E-commerce', icon: ShoppingBag },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [
+      { href: '/analytics', label: 'Analytics', icon: BarChart2 },
+      { href: '/reports', label: 'Reports', icon: PieChart },
+      { href: '/team/performance', label: 'Performance', icon: Award },
+    ],
+  },
+  {
+    label: 'Admin',
+    items: [
+      { href: '/channels', label: 'Channels', icon: Phone },
+      { href: '/team', label: 'Team', icon: UserCog },
+      { href: '/ai-bot', label: 'AI Bot', icon: Bot },
+      { href: '/widget-builder', label: 'Widget Builder', icon: Code2 },
+      { href: '/support', label: 'Support', icon: LifeBuoy },
+      { href: '/settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ];
 
 export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; className?: string }) {
@@ -57,7 +87,7 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
   return (
     <aside className={cn('flex flex-col w-64 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border', className)}>
       {/* Logo */}
-      <div className="flex items-center gap-2 px-6 py-5 border-b border-sidebar-border">
+      <div className="flex items-center gap-2 px-6 py-4 border-b border-sidebar-border">
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
           <MessageSquare className="w-4 h-4 text-white" />
         </div>
@@ -68,26 +98,37 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/');
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onNavigate}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                active
-                  ? 'bg-sidebar-accent text-white'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
-              )}
-            >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              {label}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-4">
+        {navSections.map((section, si) => (
+          <div key={si}>
+            {section.label && (
+              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
+                {section.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {section.items.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href || (href !== '/leads' && pathname.startsWith(href + '/')) || (href === '/leads' && pathname === '/leads');
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={onNavigate}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                      active
+                        ? 'bg-sidebar-accent text-white'
+                        : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                    )}
+                  >
+                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* User menu */}
