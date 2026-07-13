@@ -25,13 +25,18 @@ export class WhatsAppWebhookService {
 
   async processWebhook(body: any) {
     try {
+      this.logger.log(`Webhook received: ${JSON.stringify(body).substring(0, 300)}`);
       const entry = body?.entry?.[0];
       const changes = entry?.changes?.[0];
       const value = changes?.value;
 
-      if (!value) return;
+      if (!value) {
+        this.logger.warn('Webhook: no value in payload');
+        return;
+      }
 
       const phoneNumberId: string = value.metadata?.phone_number_id;
+      this.logger.log(`Webhook phone_number_id: ${phoneNumberId}`);
       const channel = await this.whatsapp.getChannelByPhoneNumberId(phoneNumberId);
       if (!channel) {
         this.logger.warn(`No channel found for phone_number_id: ${phoneNumberId}`);
