@@ -12,14 +12,14 @@ export class WhatsAppWebhookController {
   /** GET — Meta webhook verification handshake */
   @Public()
   @Get()
-  verify(
+  async verify(
     @Query('hub.mode') mode: string,
     @Query('hub.verify_token') token: string,
     @Query('hub.challenge') challenge: string,
     @Res() res: Response,
   ) {
     if (mode === 'subscribe') {
-      const verified = this.webhookService.verifyToken(token);
+      const verified = await this.webhookService.verifyToken(token);
       if (verified) {
         return res.status(200).send(challenge);
       }

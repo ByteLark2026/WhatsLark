@@ -11,10 +11,16 @@ export class WhatsAppWebhookService {
     private readonly whatsapp: WhatsAppService,
   ) {}
 
-  verifyToken(token: string): boolean {
-    // Check token against any active channel's webhook_verify_token
-    // For simplicity we also accept the global env token
-    return token === process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+  async verifyToken(token: string): Promise<boolean> {
+    if (token === process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN) return true;
+    // Also accept any channel's stored webhook_verify_token (supports multiple Meta Apps)
+    const { data } = await this.supabase.getAdminClient()
+      .from('whatsapp_channels')
+      .select('id')
+      .eq('webhook_verify_token', token)
+      .limit(1)
+      .maybeSingle();
+    return !!data;
   }
 
   async processWebhook(body: any) {
