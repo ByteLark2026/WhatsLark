@@ -4,6 +4,23 @@ import { cn, getInitials, formatRelativeTime } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Conversation } from '@whatslark/shared';
 
+const CHANNEL_COLORS = [
+  { bg: '#075E54', text: '#fff' },
+  { bg: '#1565C0', text: '#fff' },
+  { bg: '#6A1B9A', text: '#fff' },
+  { bg: '#D84315', text: '#fff' },
+  { bg: '#2E7D32', text: '#fff' },
+  { bg: '#00695C', text: '#fff' },
+  { bg: '#4527A0', text: '#fff' },
+  { bg: '#AD1457', text: '#fff' },
+];
+
+function channelColor(channelId: string) {
+  let hash = 0;
+  for (let i = 0; i < channelId.length; i++) hash = (hash * 31 + channelId.charCodeAt(i)) >>> 0;
+  return CHANNEL_COLORS[hash % CHANNEL_COLORS.length];
+}
+
 interface Props {
   conversations: Conversation[];
   selectedId?: string;
@@ -46,7 +63,8 @@ export function ConversationList({ conversations, selectedId, onSelect, loading 
     <div className="overflow-y-auto flex-1">
       {conversations.map((conv) => {
         const contact = conv.contact;
-        const channel = (conv as any).channel as { name: string; phone_number: string; is_active: boolean } | undefined;
+        const channel = (conv as any).channel as { id: string; name: string; phone_number: string; is_active: boolean } | undefined;
+        const chColor = channel?.id && channel.is_active ? channelColor(channel.id) : null;
         const name = contact?.name || contact?.phone || 'Unknown';
         const badge = statusBadge[conv.status] ?? statusBadge.open;
 
@@ -88,12 +106,10 @@ export function ConversationList({ conversations, selectedId, onSelect, loading 
               <div className="flex items-center gap-1.5 mt-1">
                 {/* Channel pill */}
                 {channel && (
-                  <span className={cn(
-                    'text-[10px] px-1.5 py-0.5 rounded-full font-medium truncate max-w-[100px]',
-                    channel.is_active
-                      ? 'bg-green-50 text-green-700'
-                      : 'bg-gray-100 text-gray-500',
-                  )}>
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded-full font-medium truncate max-w-[100px]"
+                    style={chColor ? { backgroundColor: chColor.bg, color: chColor.text } : { backgroundColor: '#e5e7eb', color: '#6b7280' }}
+                  >
                     {channel.name}
                   </span>
                 )}
