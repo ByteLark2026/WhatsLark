@@ -59,69 +59,94 @@ export function ConversationList({ conversations, selectedId, onSelect, loading 
     );
   }
 
+  // Group by channel
+  const grouped: { channelId: string; channelName: string; color: { bg: string; text: string } | null; convs: Conversation[] }[] = [];
+  const seen = new Map<string, number>();
+  for (const conv of conversations) {
+    const ch = (conv as any).channel as { id: string; name: string; is_active: boolean } | undefined;
+    const key = ch?.id ?? '__none__';
+    if (!seen.has(key)) {
+      seen.set(key, grouped.length);
+      grouped.push({
+        channelId: key,
+        channelName: ch?.name ?? 'Unknown channel',
+        color: ch?.id ? channelColor(ch.id) : null,
+        convs: [],
+      });
+    }
+    grouped[seen.get(key)!].convs.push(conv);
+  }
+
   return (
     <div className="overflow-y-auto flex-1">
-      {conversations.map((conv) => {
-        const contact = conv.contact;
-        const channel = (conv as any).channel as { id: string; name: string; phone_number: string; is_active: boolean } | undefined;
-        const chColor = channel?.id && channel.is_active ? channelColor(channel.id) : null;
-        const name = contact?.name || contact?.phone || 'Unknown';
-        const badge = statusBadge[conv.status] ?? statusBadge.open;
-
-        return (
-          <button
-            key={conv.id}
-            onClick={() => onSelect(conv)}
-            className={cn(
-              'w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left border-b border-border/50',
-              selectedId === conv.id && 'bg-primary/5 border-l-2 border-l-primary',
-            )}
+      {grouped.map((group) => (
+        <div key={group.channelId}>
+          {/* Channel header */}
+          <div
+            className="sticky top-0 z-10 flex items-center gap-2 px-4 py-1.5 text-[11px] font-semibold border-b"
+            style={group.color
+              ? { backgroundColor: group.color.bg, color: group.color.text }
+              : { backgroundColor: '#f3f4f6', color: '#6b7280' }}
           >
-            <Avatar className="w-10 h-10 flex-shrink-0 mt-0.5">
-              <AvatarImage src={contact?.avatar_url} />
-              <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                {getInitials(name)}
-              </AvatarFallback>
-            </Avatar>
+            <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0" />
+            {group.channelName}
+            <span className="ml-auto opacity-70">{group.convs.length}</span>
+          </div>
 
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-sm font-medium truncate">{name}</span>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {conv.unread_count > 0 && (
-                    <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-medium">
-                      {conv.unread_count > 9 ? '9+' : conv.unread_count}
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {conv.last_message_at ? formatRelativeTime(conv.last_message_at) : ''}
-                  </span>
-                </div>
-              </div>
+          {group.convs.map((conv) => {
+            const contact = conv.contact;
+            const name = contact?.name || contact?.phone || 'Unknown';
+            const badge = statusBadge[conv.status] ?? statusBadge.open;
 
-              <p className="text-xs text-muted-foreground truncate mt-0.5">
-                {conv.last_message_preview || 'No messages yet'}
-              </p>
-
-              <div className="flex items-center gap-1.5 mt-1">
-                {/* Channel pill */}
-                {channel && (
-                  <span
-                    className="text-[10px] px-1.5 py-0.5 rounded-full font-medium truncate max-w-[100px]"
-                    style={chColor ? { backgroundColor: chColor.bg, color: chColor.text } : { backgroundColor: '#e5e7eb', color: '#6b7280' }}
-                  >
-                    {channel.name}
-                  </span>
+            return (
+              <button
+                key={conv.id}
+                onClick={() => onSelect(conv)}
+                className={cn(
+                  'w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left border-b border-border/50',
+                  selectedId === conv.id && 'bg-primary/5 border-l-2 border-l-primary',
                 )}
-                {/* Status pill */}
-                <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0', badge.cls)}>
-                  {badge.label}
-                </span>
-              </div>
-            </div>
-          </button>
-        );
-      })}
+              >
+                <Avatar className="w-10 h-10 flex-shrink-0 mt-0.5">
+                  <AvatarImage src={contact?.avatar_url} />
+                  <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                    {getInitials(name)}
+                  </AvatarFallback>
+                </Avatar>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-sm font-medium truncate">{name}</span>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {conv.unread_count > 0 && (
+                        <span
+                          className="w-5 h-5 rounded-full text-white text-xs flex items-center justify-center font-medium"
+                          style={{ backgroundColor: group.color?.bg ?? '#075E54' }}
+                        >
+                          {conv.unread_count > 9 ? '9+' : conv.unread_count}
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {conv.last_message_at ? formatRelativeTime(conv.last_message_at) : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">
+                    {conv.last_message_preview || 'No messages yet'}
+                  </p>
+
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0', badge.cls)}>
+                      {badge.label}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
