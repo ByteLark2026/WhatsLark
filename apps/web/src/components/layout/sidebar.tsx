@@ -96,7 +96,7 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
     <aside className={cn('flex flex-col w-64 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border', className)}>
       {/* Logo */}
       <div className="flex items-center gap-2 px-6 py-4 border-b border-sidebar-border">
-        <img src="/logo.png" alt="WhatsLark" className="w-8 h-8 rounded-lg object-cover" />
+        <img src="/logo.png" alt="WhatsLark" className="h-10 w-auto object-contain" />
         {company && <p className="text-xs text-sidebar-foreground/60 truncate max-w-[140px]">{company.name}</p>}
       </div>
 

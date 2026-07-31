@@ -71,7 +71,7 @@ export default function RegisterPage() {
   return (
     <div className="w-full max-w-md">
       <div className="flex items-center gap-2 mb-8 lg:hidden">
-        <img src="/logo.png" alt="WhatsLark" className="w-8 h-8 rounded-lg object-cover" />
+        <img src="/logo.png" alt="WhatsLark" className="h-10 w-auto object-contain" />
         <span className="text-xl font-bold">WhatsLark</span>
       </div>
 
