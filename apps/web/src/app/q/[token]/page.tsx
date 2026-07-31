@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { CheckCircle, XCircle } from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://whatslark.onrender.com/api/v1';
+const API_URL = `${process.env.NEXT_PUBLIC_API_URL || 'https://whatslark.onrender.com'}/api/v1`;
 
 function fmt(n: number, currency = 'AED') {
   return `${currency} ${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

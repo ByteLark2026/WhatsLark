@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://whatslark.onrender.com/api/v1';
+const API_URL = `${process.env.NEXT_PUBLIC_API_URL || 'https://whatslark.onrender.com'}/api/v1`;
 
 async function getInvoice(token: string) {
   const res = await fetch(`${API_URL}/invoices/public/${token}`, { cache: 'no-store' });

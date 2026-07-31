@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://whatslark.onrender.com/api/v1';
+const API_URL = `${process.env.NEXT_PUBLIC_API_URL || 'https://whatslark.onrender.com'}/api/v1`;
 
 interface Field {
   id: string;
