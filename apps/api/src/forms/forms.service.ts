@@ -202,7 +202,7 @@ export class FormsService {
   async getPublicForm(slug: string) {
     const { data, error } = await this.db()
       .from('forms')
-      .select('id, title, description, fields, settings')
+      .select('id, title, description, fields, settings, is_active')
       .eq('slug', slug)
       .eq('is_active', true)
       .maybeSingle();

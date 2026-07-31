@@ -15,6 +15,7 @@ import { getInitials } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
+import { ChannelSwitcher } from './channel-switcher';
 
 const navSections = [
   {
@@ -103,6 +104,9 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
           {company && <p className="text-xs text-sidebar-foreground/60 truncate max-w-[120px]">{company.name}</p>}
         </div>
       </div>
+
+      {/* Channel switcher */}
+      <ChannelSwitcher />
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-4">

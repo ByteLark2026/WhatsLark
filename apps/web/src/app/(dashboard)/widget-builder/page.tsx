@@ -189,6 +189,8 @@ export default function WidgetBuilderPage() {
     setSaving(false);
   };
 
+  const widgetOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+
   const installCode = `<!-- WhatsLark Chat Widget -->
 <script>
   window.whatsLarkConfig = {
@@ -197,7 +199,7 @@ export default function WidgetBuilderPage() {
     title: "${config.title}",
   };
 </script>
-<script src="https://widget.whatslark.com/widget.js" async></script>`;
+<script src="${widgetOrigin}/widget.js" async></script>`;
 
   const copyCode = () => {
     navigator.clipboard.writeText(installCode);

@@ -13,6 +13,7 @@ import { ConversationList } from '@/components/inbox/conversation-list';
 import { ChatWindow } from '@/components/inbox/chat-window';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth';
+import { useChannelStore } from '@/store/channel';
 import { cn } from '@/lib/utils';
 import { ConversationStatus } from '@whatslark/shared';
 import type { Conversation, WhatsAppChannel, Contact } from '@whatslark/shared';
@@ -20,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export default function InboxPage() {
   const { company, user } = useAuthStore();
+  const { selectedChannelId } = useChannelStore();
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const conversationParam = searchParams.get('conversation');
@@ -29,6 +31,7 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<ConversationStatus | 'all'>(ConversationStatus.OPEN);
   const [search, setSearch] = useState('');
+  const [hideInactive, setHideInactive] = useState(true);
 
   // New conversation dialog state
   const [showNew, setShowNew] = useState(false);
@@ -49,13 +52,14 @@ export default function InboxPage() {
       .order('last_message_at', { ascending: false, nullsFirst: false });
 
     if (status !== 'all') query = query.eq('status', status);
+    if (selectedChannelId) query = query.eq('channel_id', selectedChannelId);
 
     const { data, error } = await query;
     if (!error && data) setConversations(data as unknown as Conversation[]);
     setLoading(false);
   };
 
-  useEffect(() => { loadConversations(); }, [company?.id, status]);
+  useEffect(() => { loadConversations(); }, [company?.id, status, selectedChannelId]);
 
   // Auto-select from URL param
   useEffect(() => {
@@ -107,6 +111,7 @@ export default function InboxPage() {
   });
 
   const filteredConversations = conversations.filter((c) => {
+    if (hideInactive && c.channel?.is_active === false) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -115,6 +120,8 @@ export default function InboxPage() {
       c.last_message_preview?.toLowerCase().includes(q)
     );
   });
+
+  const inactiveCount = conversations.filter((c) => c.channel?.is_active === false).length;
 
   const handleStatusChange = (id: string, newStatus: Conversation['status']) => {
     setConversations((prev) => prev.map((c) => c.id === id ? { ...c, status: newStatus } : c));
@@ -225,6 +232,17 @@ export default function InboxPage() {
               <SelectItem value="closed">Closed</SelectItem>
             </SelectContent>
           </Select>
+          {inactiveCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setHideInactive((v) => !v)}
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+            >
+              {hideInactive
+                ? `Hide ${inactiveCount} chat${inactiveCount > 1 ? 's' : ''} from deactivated channels — Show`
+                : `Showing chats from deactivated channels — Hide`}
+            </button>
+          )}
         </div>
         <ConversationList
           conversations={filteredConversations}

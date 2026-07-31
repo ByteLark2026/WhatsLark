@@ -20,6 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { createClient } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { useChannelStore } from '@/store/channel';
 import { CampaignStatus } from '@whatslark/shared';
 import type { Campaign, MessageTemplate, WhatsAppChannel, Contact } from '@whatslark/shared';
 import { formatDate } from '@/lib/utils';
@@ -51,6 +52,7 @@ function toDatetimeLocalValue(iso: string) {
 export default function CampaignsPage() {
   const { toast } = useToast();
   const { company, user } = useAuthStore();
+  const { selectedChannelId } = useChannelStore();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats>({ total: 0, recipients: 0, deliveryRate: 0, readRate: 0, failed: 0 });
@@ -80,11 +82,13 @@ export default function CampaignsPage() {
     if (!company?.id) { setLoading(false); return; }
     const supabase = createClient();
     (async () => {
-      const { data } = await supabase
+      let q = supabase
         .from('campaigns')
         .select('*, template:message_templates(name, category, language), channel:whatsapp_channels(name, phone_number)')
         .eq('company_id', company.id)
         .order('created_at', { ascending: false });
+      if (selectedChannelId) q = q.eq('channel_id', selectedChannelId);
+      const { data } = await q;
       if (data) {
         setCampaigns(data as unknown as Campaign[]);
         const total = data.length;
@@ -103,7 +107,7 @@ export default function CampaignsPage() {
       }
       setLoading(false);
     })();
-  }, [company?.id]);
+  }, [company?.id, selectedChannelId]);
 
   const openCreateDialog = async () => {
     setShowCreate(true);

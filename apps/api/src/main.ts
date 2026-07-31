@@ -9,6 +9,19 @@ async function bootstrap() {
 
   // Security
   app.use(helmet());
+
+  // The chat widget is embedded on arbitrary third-party sites, so its routes
+  // need to accept any origin — handled here, ahead of the app-wide CORS policy below.
+  app.use((req: any, res: any, next: any) => {
+    if (req.path.startsWith('/api/v1/widget')) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      if (req.method === 'OPTIONS') return res.sendStatus(204);
+    }
+    next();
+  });
+
   app.enableCors({
     origin: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
     credentials: true,

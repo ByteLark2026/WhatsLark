@@ -17,7 +17,7 @@ export class MessagesService {
     // Get conversation + contact
     const { data: conv, error: convErr } = await this.supabase.getAdminClient()
       .from('conversations')
-      .select('*, contacts (phone), whatsapp_channels:channel_id (id)')
+      .select('*, contacts (phone), whatsapp_channels:channel_id (id, channel_type)')
       .eq('id', dto.conversation_id)
       .eq('company_id', companyId)
       .single();
@@ -26,13 +26,17 @@ export class MessagesService {
 
     const phone = conv.contacts.phone;
     const channelId = conv.whatsapp_channels.id;
+    const isWidget = conv.whatsapp_channels.channel_type === 'widget';
 
-    // Send via WhatsApp API
+    // Widget conversations aren't real WhatsApp numbers — the visitor's browser
+    // picks replies up by polling GET /widget/messages instead.
     let waMessageId: string | undefined;
-    try {
-      waMessageId = await this.whatsapp.sendTextMessage(channelId, phone, dto.message);
-    } catch (err: any) {
-      throw new BadRequestException(`WhatsApp send failed: ${err.message}`);
+    if (!isWidget) {
+      try {
+        waMessageId = await this.whatsapp.sendTextMessage(channelId, phone, dto.message);
+      } catch (err: any) {
+        throw new BadRequestException(`WhatsApp send failed: ${err.message}`);
+      }
     }
 
     // Save to DB

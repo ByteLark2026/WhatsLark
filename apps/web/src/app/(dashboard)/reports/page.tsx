@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Header } from '@/components/layout/header';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth';
+import { useChannelStore } from '@/store/channel';
 import { CampaignStatus } from '@whatslark/shared';
 import type { Campaign } from '@whatslark/shared';
 import { formatDate } from '@/lib/utils';
@@ -98,6 +99,7 @@ function CampaignFunnel({ campaign }: { campaign: Campaign }) {
 
 export default function ReportsPage() {
   const { company } = useAuthStore();
+  const { selectedChannelId } = useChannelStore();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -106,15 +108,17 @@ export default function ReportsPage() {
     if (!company?.id) { setLoading(false); return; }
     const supabase = createClient();
     (async () => {
-      const { data } = await supabase
+      let q = supabase
         .from('campaigns')
         .select('id, name, status, total_recipients, sent_count, delivered_count, read_count, replied_count, failed_count, created_at, scheduled_at')
         .eq('company_id', company.id)
         .order('created_at', { ascending: false });
+      if (selectedChannelId) q = q.eq('channel_id', selectedChannelId);
+      const { data } = await q;
       setCampaigns((data as any) || []);
       setLoading(false);
     })();
-  }, [company?.id]);
+  }, [company?.id, selectedChannelId]);
 
   const visible = campaigns.filter((c) =>
     !search || (c as any).name?.toLowerCase().includes(search.toLowerCase()) || c.status.includes(search),

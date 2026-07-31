@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Header } from '@/components/layout/header';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth';
+import { useChannelStore } from '@/store/channel';
 import {
   AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
@@ -28,6 +29,7 @@ const RANGE_DAYS: Record<Range, number> = { '7d': 7, '30d': 30, '3m': 90 };
 
 export default function AnalyticsPage() {
   const { company } = useAuthStore();
+  const { selectedChannelId } = useChannelStore();
   const [range, setRange] = useState<Range>('30d');
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<any[]>([]);
@@ -42,16 +44,22 @@ export default function AnalyticsPage() {
 
     setLoading(true);
     (async () => {
+      let msgQ = supabase
+        .from('messages')
+        .select('created_at, status, direction')
+        .eq('company_id', company.id)
+        .gte('created_at', since);
+      if (selectedChannelId) msgQ = msgQ.eq('channel_id', selectedChannelId);
+
+      let campQ = supabase
+        .from('campaigns')
+        .select('status, total_recipients, sent_count, delivered_count, read_count, failed_count, replied_count')
+        .eq('company_id', company.id);
+      if (selectedChannelId) campQ = campQ.eq('channel_id', selectedChannelId);
+
       const [msgRes, campRes, ctRes] = await Promise.all([
-        supabase
-          .from('messages')
-          .select('created_at, status, direction')
-          .eq('company_id', company.id)
-          .gte('created_at', since),
-        supabase
-          .from('campaigns')
-          .select('status, total_recipients, sent_count, delivered_count, read_count, failed_count, replied_count')
-          .eq('company_id', company.id),
+        msgQ,
+        campQ,
         supabase
           .from('contacts')
           .select('id', { count: 'exact', head: true })
@@ -62,7 +70,7 @@ export default function AnalyticsPage() {
       setContactCount(ctRes.count || 0);
       setLoading(false);
     })();
-  }, [company?.id, range]);
+  }, [company?.id, range, selectedChannelId]);
 
   const { chartData, overview } = useMemo(() => {
     const days = RANGE_DAYS[range];
