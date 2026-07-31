@@ -97,10 +97,7 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
       {/* Logo */}
       <div className="flex items-center gap-2 px-6 py-4 border-b border-sidebar-border">
         <img src="/logo.png" alt="WhatsLark" className="w-8 h-8 rounded-lg object-cover" />
-        <div>
-          <span className="font-bold text-white text-lg leading-none">WhatsLark</span>
-          {company && <p className="text-xs text-sidebar-foreground/60 truncate max-w-[120px]">{company.name}</p>}
-        </div>
+        {company && <p className="text-xs text-sidebar-foreground/60 truncate max-w-[140px]">{company.name}</p>}
       </div>
 
       {/* Channel switcher */}
