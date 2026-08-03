@@ -246,10 +246,23 @@ export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
                 ) : msg.media_url && msg.type === 'video' ? (
                   <video src={`/api/media?id=${encodeURIComponent(msg.media_url)}&channel_id=${encodeURIComponent(conversation.channel_id)}`}
                     controls className="max-w-[240px] rounded-lg" />
-                ) : msg.media_url && (msg.type === 'document' || msg.type === 'audio') ? (
+                ) : msg.media_url && msg.type === 'audio' ? (
+                  <div className="min-w-[220px]">
+                    <audio
+                      src={`/api/media?id=${encodeURIComponent(msg.media_url)}&channel_id=${encodeURIComponent(conversation.channel_id)}`}
+                      controls
+                      className="w-full h-9"
+                    />
+                    {msg.content ? (
+                      <p className="text-xs mt-1.5 opacity-80 italic">"{msg.content}"</p>
+                    ) : (
+                      <p className="text-xs mt-1.5 opacity-60">Transcript unavailable</p>
+                    )}
+                  </div>
+                ) : msg.media_url && msg.type === 'document' ? (
                   <a href={`/api/media?id=${encodeURIComponent(msg.media_url)}&channel_id=${encodeURIComponent(conversation.channel_id)}`}
                     target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 underline text-sm">
-                    📎 {msg.content || (msg.type === 'audio' ? 'Voice message' : 'File')}
+                    📎 {msg.content || 'File'}
                   </a>
                 ) : (
                   <p className="whitespace-pre-wrap">{msg.content}</p>

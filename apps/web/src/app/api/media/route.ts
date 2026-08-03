@@ -7,6 +7,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { decryptToken } from '@/lib/token-crypto';
 
 const GRAPH_VERSION = process.env.WHATSAPP_API_VERSION || 'v21.0';
 
@@ -33,11 +34,12 @@ export async function GET(req: NextRequest) {
   if (!channel?.access_token) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
+  const accessToken = decryptToken(channel.access_token);
 
   // Step 1: get the download URL from Meta
   const metaRes = await fetch(
     `https://graph.facebook.com/${GRAPH_VERSION}/${mediaId}`,
-    { headers: { Authorization: `Bearer ${channel.access_token}` } },
+    { headers: { Authorization: `Bearer ${accessToken}` } },
   );
 
   if (!metaRes.ok) {
@@ -52,7 +54,7 @@ export async function GET(req: NextRequest) {
 
   // Step 2: download the file and stream it
   const fileRes = await fetch(downloadUrl, {
-    headers: { Authorization: `Bearer ${channel.access_token}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!fileRes.ok) {

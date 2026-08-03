@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { TemplateComponent, TemplateButton } from '@whatslark/shared';
+import { decryptToken } from '@/lib/token-crypto';
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -161,6 +162,7 @@ export async function POST(req: NextRequest) {
     if (chErr || !channel) {
       return NextResponse.json({ message: 'No active WhatsApp channel connected. Connect one in Channels first.' }, { status: 400 });
     }
+    channel.access_token = decryptToken(channel.access_token);
 
     const components = await Promise.all(
       ((template.components || []) as TemplateComponent[]).map((c) => transformComponent(c, channel as ChannelCreds)),

@@ -1,10 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createHmac, timingSafeEqual } from 'crypto';
+import { decryptToken } from '@/lib/token-crypto';
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
+
+/** Verifies Meta's X-Hub-Signature-256 against the channel's app_secret.
+ *  Channels without one configured yet are allowed through with a warning (see apps/api's
+ *  equivalent check for the same backward-compatibility rationale). */
+async function verifySignature(rawBody: string, signatureHeader: string | null): Promise<boolean> {
+  let phoneNumberId: string | undefined;
+  try {
+    phoneNumberId = JSON.parse(rawBody)?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+  } catch {
+    return true; // not JSON we can key on — let downstream parsing/handling reject it
+  }
+  if (!phoneNumberId) return true;
+
+  const { data: channel } = await adminSupabase
+    .from('whatsapp_channels')
+    .select('app_secret')
+    .eq('phone_number_id', phoneNumberId)
+    .maybeSingle();
+
+  if (!channel?.app_secret) {
+    console.warn(`[webhook] signature not verified: no app_secret configured for phone_number_id ${phoneNumberId}`);
+    return true;
+  }
+
+  if (!signatureHeader) {
+    console.error(`[webhook] rejected: missing signature for phone_number_id ${phoneNumberId}`);
+    return false;
+  }
+
+  const secret = decryptToken(channel.app_secret);
+  const expected = 'sha256=' + createHmac('sha256', secret).update(rawBody).digest('hex');
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signatureHeader);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    console.error(`[webhook] rejected: signature mismatch for phone_number_id ${phoneNumberId}`);
+    return false;
+  }
+  return true;
+}
 
 // ── GET — webhook verification (Meta Cloud API) ───────────────────────────────
 export async function GET(req: NextRequest) {
@@ -36,7 +77,14 @@ export async function GET(req: NextRequest) {
 
 // ── POST — incoming events from Meta ─────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null);
+  const rawBody = await req.text();
+
+  const valid = await verifySignature(rawBody, req.headers.get('x-hub-signature-256'));
+  if (!valid) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+
+  const body = (() => { try { return JSON.parse(rawBody); } catch { return null; } })();
   console.log('[webhook/whatsapp] POST received, object:', body?.object, 'entries:', body?.entry?.length);
   if (body) {
     // Must await — Vercel serverless terminates after response, so fire-and-forget never completes
@@ -78,6 +126,7 @@ async function processWebhookBody(body: any) {
       }
 
       if (!channel.is_active) continue;
+      channel.access_token = decryptToken(channel.access_token);
 
       // Status updates (delivery receipts) — no message content involved
       for (const status of value.statuses || []) {
@@ -153,7 +202,21 @@ async function handleIncomingMessage(
 
   if (!conversation) return;
 
-  const { type, content, mediaUrl } = extractContent(msg);
+  let { type, content, mediaUrl } = extractContent(msg);
+
+  // Transcribe inbound voice notes so agents/AI can read them without downloading audio.
+  let transcript: string | null = null;
+  if (type === 'audio' && mediaUrl) {
+    try {
+      const media = await fetchMetaMedia(access_token, mediaUrl);
+      if (media) {
+        transcript = await transcribeAudio(media.buffer, media.contentType);
+        if (transcript) content = transcript;
+      }
+    } catch (err) {
+      console.error('[webhook] voice note transcription error:', err);
+    }
+  }
 
   // Deduplicate — wa_message_id has no unique constraint yet, so check manually
   const { data: existing } = await adminSupabase
@@ -177,7 +240,7 @@ async function handleIncomingMessage(
         status: 'delivered',
         wa_message_id: msg.id,
         is_note: false,
-        metadata: msg,
+        metadata: transcript ? { ...msg, transcript } : msg,
       });
     if (insertErr) console.error('[webhook] insert error:', insertErr.message);
     else {
@@ -218,6 +281,46 @@ async function handleIncomingMessage(
       unread_count: (conversation.unread_count ?? 0) + 1,
     })
     .eq('id', conversation.id);
+}
+
+// ── Voice note transcription ──────────────────────────────────────────────────
+async function fetchMetaMedia(accessToken: string, mediaId: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+  const metaRes = await fetch(`https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION || 'v21.0'}/${mediaId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!metaRes.ok) return null;
+  const { url: downloadUrl } = await metaRes.json();
+  if (!downloadUrl) return null;
+
+  const fileRes = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!fileRes.ok) return null;
+
+  return {
+    buffer: Buffer.from(await fileRes.arrayBuffer()),
+    contentType: fileRes.headers.get('content-type') || 'audio/ogg',
+  };
+}
+
+async function transcribeAudio(buffer: Buffer, contentType: string): Promise<string | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const ext = contentType.includes('mp4') ? 'mp4' : contentType.includes('mpeg') ? 'mp3' : 'ogg';
+  const form = new FormData();
+  form.append('file', new Blob([new Uint8Array(buffer)], { type: contentType }), `voice-note.${ext}`);
+  form.append('model', 'whisper-1');
+
+  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+  if (!res.ok) {
+    console.error('[webhook] transcription failed:', await res.text().catch(() => res.statusText));
+    return null;
+  }
+  const json = await res.json();
+  return json.text?.trim() || null;
 }
 
 // ── Delivery/read status updates ──────────────────────────────────────────────

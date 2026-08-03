@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { decryptToken } from '@/lib/token-crypto';
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,7 +27,7 @@ async function sendViaMeta(channel: {
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${channel.access_token}`,
+        Authorization: `Bearer ${decryptToken(channel.access_token)}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

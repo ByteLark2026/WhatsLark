@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { decryptToken } from '@/lib/token-crypto';
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
       error: `Channel not found: ${channelErr?.message}`,
     }, { status: 404 });
   }
+  channel.access_token = decryptToken(channel.access_token);
 
   const checks: Record<string, any> = {};
 
