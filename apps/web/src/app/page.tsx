@@ -12,34 +12,72 @@ const features = [
   { icon: Shield, title: 'Multi-tenant & Secure', desc: 'Each workspace is isolated with row-level security. Enterprise-ready from day one.' },
 ];
 
-const plans = [
+// Fallback shown only if the API is unreachable — the real source of truth is
+// the subscription_plans table, managed in Admin > Subscription Plans.
+const FALLBACK_PLANS = [
   {
-    name: 'Starter',
-    price: '$29',
-    period: '/month',
+    name: 'Starter', price: '$29', period: '/month',
     features: ['2 agents', '1 WhatsApp number', '1,000 contacts', '5 campaigns/month', 'Basic automations'],
-    cta: 'Start free trial',
-    highlighted: false,
+    cta: 'Start free trial', highlighted: false,
   },
   {
-    name: 'Growth',
-    price: '$79',
-    period: '/month',
+    name: 'Growth', price: '$79', period: '/month',
     features: ['10 agents', '3 WhatsApp numbers', '10,000 contacts', 'Unlimited campaigns', 'AI assistant', 'Analytics'],
-    cta: 'Start free trial',
-    highlighted: true,
+    cta: 'Start free trial', highlighted: true,
   },
   {
-    name: 'Enterprise',
-    price: 'Custom',
-    period: '',
+    name: 'Enterprise', price: 'Custom', period: '',
     features: ['Unlimited agents', 'Unlimited numbers', 'Unlimited contacts', 'Dedicated support', 'SLA', 'Custom integrations'],
-    cta: 'Contact sales',
-    highlighted: false,
+    cta: 'Contact sales', highlighted: false,
   },
 ];
 
-export default function HomePage() {
+interface ApiPlan {
+  id: string;
+  name: string;
+  price_monthly: number;
+  currency: string;
+  max_users: number | null;
+  max_channels: number | null;
+  max_contacts: number | null;
+  max_messages_per_month: number | null;
+  features: string[];
+}
+
+function planLimitLines(p: ApiPlan): string[] {
+  const lines: string[] = [];
+  lines.push(p.max_users ? `${p.max_users} agent${p.max_users === 1 ? '' : 's'}` : 'Unlimited agents');
+  lines.push(p.max_channels ? `${p.max_channels} WhatsApp number${p.max_channels === 1 ? '' : 's'}` : 'Unlimited WhatsApp numbers');
+  lines.push(p.max_contacts ? `${p.max_contacts.toLocaleString()} contacts` : 'Unlimited contacts');
+  if (p.max_messages_per_month) lines.push(`${p.max_messages_per_month.toLocaleString()} messages/month`);
+  return [...lines, ...(Array.isArray(p.features) ? p.features : [])];
+}
+
+async function getPlans() {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const res = await fetch(`${apiUrl}/api/v1/plans`, { next: { revalidate: 300 } }); // 5 min cache
+    if (!res.ok) return FALLBACK_PLANS;
+    const data: ApiPlan[] = await res.json();
+    if (!Array.isArray(data) || data.length === 0) return FALLBACK_PLANS;
+
+    return data.map((p, i) => ({
+      name: p.name,
+      price: p.price_monthly > 0
+        ? new Intl.NumberFormat('en', { style: 'currency', currency: p.currency || 'USD', maximumFractionDigits: 0 }).format(p.price_monthly)
+        : 'Custom',
+      period: p.price_monthly > 0 ? '/month' : '',
+      features: planLimitLines(p),
+      cta: p.price_monthly > 0 ? 'Start free trial' : 'Contact sales',
+      highlighted: data.length === 3 ? i === 1 : false,
+    }));
+  } catch {
+    return FALLBACK_PLANS;
+  }
+}
+
+export default async function HomePage() {
+  const plans = await getPlans();
   return (
     <div className="min-h-screen bg-white">
       {/* Nav */}

@@ -71,6 +71,17 @@ export class SuperAdminContentService {
     return data;
   }
 
+  /** Public-facing subset (landing page, signup) — active plans only, no admin-only fields needed beyond what's already public info. */
+  async listActiveSubscriptionPlans() {
+    const { data, error } = await this.supabase.getAdminClient()
+      .from('subscription_plans')
+      .select('id, name, slug, price_monthly, price_yearly, currency, max_users, max_channels, max_contacts, max_messages_per_month, features, sort_order')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+    if (error) throw new BadRequestException(error.message);
+    return data;
+  }
+
   async createSubscriptionPlan(dto: any) {
     const { data, error } = await this.supabase.getAdminClient()
       .from('subscription_plans')
