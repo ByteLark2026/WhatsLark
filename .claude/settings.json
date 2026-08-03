@@ -1,8 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl -s \"https://nbmmfsqqkvzbtrjidhqm.supabase.co/rest/v1/whatsapp_channels?name=eq.BYTK&select=id\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ibW1mc3Fxa3Z6YnRyamlkaHFtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDkxNTYxNiwiZXhwIjoyMDk2NDkxNjE2fQ.4YBuQN5ufgvbhS2VEea2uROUVN_jVsAZu467xAoozcU\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ibW1mc3Fxa3Z6YnRyamlkaHFtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDkxNTYxNiwiZXhwIjoyMDk2NDkxNjE2fQ.4YBuQN5ufgvbhS2VEea2uROUVN_jVsAZu467xAoozcU\")",
-      "Bash(curl -s \"https://whats-lark.vercel.app/api/whatsapp/diagnose?channel_id=$\\(curl -s \"https://nbmmfsqqkvzbtrjidhqm.supabase.co/rest/v1/whatsapp_channels?name=eq.BYTK&select=id\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ibW1mc3Fxa3Z6YnRyamlkaHFtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDkxNTYxNiwiZXhwIjoyMDk2NDkxNjE2fQ.4YBuQN5ufgvbhS2VEea2uROUVN_jVsAZu467xAoozcU\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ibW1mc3Fxa3Z6YnRyamlkaHFtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDkxNTYxNiwiZXhwIjoyMDk2NDkxNjE2fQ.4YBuQN5ufgvbhS2VEea2uROUVN_jVsAZu467xAoozcU\")",
       "Bash(node -e \"process.stdin.on\\('data',d=>console.log\\(JSON.stringify\\(JSON.parse\\(d\\),null,2\\)\\)\\)\")"
     ]
   }

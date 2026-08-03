@@ -1,7 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
+import 'dotenv/config';
 
-const SUPABASE_URL = 'https://nbmmfsqqkvzbtrjidhqm.supabase.co';
-const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ibW1mc3Fxa3Z6YnRyamlkaHFtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDkxNTYxNiwiZXhwIjoyMDk2NDkxNjE2fQ.4YBuQN5ufgvbhS2VEea2uROUVN_jVsAZu467xAoozcU';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY — set them in apps/api/.env or your shell environment.');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -81,7 +87,7 @@ const projectRef = 'nbmmfsqqkvzbtrjidhqm';
 try {
   const { default: pg } = await import('pg');
   const client = new pg.Client({
-    connectionString: 'postgresql://postgres.nbmmfsqqkvzbtrjidhqm:Mannarkkad%408129@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres',
+    connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
   });
   await client.connect();

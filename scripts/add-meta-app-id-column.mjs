@@ -1,7 +1,14 @@
 import pg from 'pg';
+import 'dotenv/config';
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error('Missing DATABASE_URL — set it in apps/api/.env or your shell environment (Supabase project pooler connection string).');
+  process.exit(1);
+}
 
 const client = new pg.Client({
-  connectionString: 'postgresql://postgres.nbmmfsqqkvzbtrjidhqm:Mannarkkad%408129@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres',
+  connectionString,
   ssl: { rejectUnauthorized: false },
 });
 
