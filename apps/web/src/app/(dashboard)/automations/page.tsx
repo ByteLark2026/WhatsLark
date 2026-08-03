@@ -120,9 +120,13 @@ export default function AutomationsPage() {
     setChatLoading(true);
 
     try {
+      const { data: sessionData } = await createClient().auth.getSession();
       const res = await fetch('/api/automations/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionData.session ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           message: userMsg,
           history: newHistory.slice(0, -1), // exclude the message we just added — it's in `message`

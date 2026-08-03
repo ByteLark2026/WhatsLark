@@ -8,7 +8,8 @@ export class SuperAdminContentService {
   // ===================== Notifications =====================
 
   async listNotifications(opts: { page?: number; limit?: number } = {}) {
-    const { page = 1, limit = 20 } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 20;
     const offset = (page - 1) * limit;
 
     const { data, error, count } = await this.supabase.getAdminClient()
@@ -103,7 +104,9 @@ export class SuperAdminContentService {
   // ===================== Subscriptions Data (read-only) =====================
 
   async listSubscriptions(opts: { page?: number; limit?: number; status?: string } = {}) {
-    const { page = 1, limit = 20, status } = opts;
+    const { status } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 20;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
@@ -122,7 +125,9 @@ export class SuperAdminContentService {
   // ===================== Transactions =====================
 
   async listTransactions(opts: { page?: number; limit?: number; status?: string; company_id?: string } = {}) {
-    const { page = 1, limit = 20, status, company_id } = opts;
+    const { status, company_id } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 20;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
@@ -172,7 +177,9 @@ export class SuperAdminContentService {
   // ===================== Support Tickets =====================
 
   async listSupportTickets(opts: { page?: number; limit?: number; status?: string; priority?: string } = {}) {
-    const { page = 1, limit = 20, status, priority } = opts;
+    const { status, priority } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 20;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()

@@ -27,7 +27,9 @@ export class InvoicesService {
   }
 
   async list(companyId: string, opts: { status?: string; page?: number; limit?: number } = {}) {
-    const { status, page = 1, limit = 50 } = opts;
+    const { status } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 50;
     const offset = (page - 1) * limit;
     let query = this.supabase.getAdminClient()
       .from('invoices')
@@ -65,17 +67,25 @@ export class InvoicesService {
     discount?: number; currency?: string;
     due_date?: string; notes?: string;
   }) {
-    const number = await this.nextNumber(companyId);
     const lineItems = dto.line_items || [];
     const totals = calcTotals(lineItems, dto.tax_rate || 0, dto.discount || 0);
-    const { data, error } = await this.supabase.getAdminClient()
-      .from('invoices')
-      .insert({
-        company_id: companyId, created_by: userId, number,
-        line_items: lineItems, tax_rate: dto.tax_rate || 0, discount: dto.discount || 0,
-        currency: dto.currency || 'AED', due_date: dto.due_date, notes: dto.notes,
-        contact_id: dto.contact_id, lead_id: dto.lead_id, ...totals,
-      }).select().single();
+
+    // Retry on number collision: two concurrent creates can compute the same
+    // COUNT(*)+1 number; the DB's UNIQUE(company_id, number) rejects the loser,
+    // which just needs to recompute and try again rather than fail outright.
+    let data: any, error: any;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const number = await this.nextNumber(companyId);
+      ({ data, error } = await this.supabase.getAdminClient()
+        .from('invoices')
+        .insert({
+          company_id: companyId, created_by: userId, number,
+          line_items: lineItems, tax_rate: dto.tax_rate || 0, discount: dto.discount || 0,
+          currency: dto.currency || 'AED', due_date: dto.due_date, notes: dto.notes,
+          contact_id: dto.contact_id, lead_id: dto.lead_id, ...totals,
+        }).select().single());
+      if (!error || error.code !== '23505') break;
+    }
     if (error) throw new BadRequestException(error.message);
     return data;
   }
@@ -97,6 +107,10 @@ export class InvoicesService {
   }
 
   async markPaid(companyId: string, id: string) {
+    const invoice = await this.get(companyId, id);
+    if (!['sent', 'overdue'].includes(invoice.status)) {
+      throw new BadRequestException(`Cannot mark invoice as paid from status "${invoice.status}" — it must be sent first`);
+    }
     return this.update(companyId, id, { status: 'paid', paid_at: new Date().toISOString() });
   }
 

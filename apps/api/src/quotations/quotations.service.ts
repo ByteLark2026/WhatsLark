@@ -23,7 +23,9 @@ export class QuotationsService {
   }
 
   async list(companyId: string, opts: { status?: string; page?: number; limit?: number } = {}) {
-    const { status, page = 1, limit = 50 } = opts;
+    const { status } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 50;
     const offset = (page - 1) * limit;
     let query = this.supabase.getAdminClient()
       .from('quotations')
@@ -56,18 +58,23 @@ export class QuotationsService {
   }
 
   async create(companyId: string, userId: string, dto: any) {
-    const number = await this.nextNumber(companyId);
     const lineItems = dto.line_items || [];
     const totals = calcTotals(lineItems, dto.tax_rate || 0, dto.discount || 0);
-    const { data, error } = await this.supabase.getAdminClient()
-      .from('quotations')
-      .insert({
-        company_id: companyId, created_by: userId, number,
-        line_items: lineItems, tax_rate: dto.tax_rate || 0, discount: dto.discount || 0,
-        currency: dto.currency || 'AED', valid_until: dto.valid_until,
-        notes: dto.notes, terms: dto.terms,
-        contact_id: dto.contact_id, lead_id: dto.lead_id, ...totals,
-      }).select().single();
+
+    let data: any, error: any;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const number = await this.nextNumber(companyId);
+      ({ data, error } = await this.supabase.getAdminClient()
+        .from('quotations')
+        .insert({
+          company_id: companyId, created_by: userId, number,
+          line_items: lineItems, tax_rate: dto.tax_rate || 0, discount: dto.discount || 0,
+          currency: dto.currency || 'AED', valid_until: dto.valid_until,
+          notes: dto.notes, terms: dto.terms,
+          contact_id: dto.contact_id, lead_id: dto.lead_id, ...totals,
+        }).select().single());
+      if (!error || error.code !== '23505') break;
+    }
     if (error) throw new BadRequestException(error.message);
     return data;
   }
@@ -98,17 +105,38 @@ export class QuotationsService {
 
   async convertToInvoice(companyId: string, userId: string, id: string) {
     const quote = await this.get(companyId, id);
-    const invoice = await this.invoices.create(companyId, userId, {
-      contact_id: quote.contact_id,
-      lead_id: quote.lead_id,
-      line_items: quote.line_items,
-      tax_rate: quote.tax_rate,
-      discount: quote.discount,
-      currency: quote.currency,
-      notes: quote.notes,
-    });
-    await this.update(companyId, id, { status: 'converted', converted_invoice_id: invoice.id });
-    return invoice;
+    if (quote.status === 'converted') throw new BadRequestException('Quotation already converted');
+
+    // Atomic claim: only succeeds for the first concurrent caller, since Postgres
+    // serializes UPDATEs to the same row — the loser's WHERE status != 'converted' matches 0 rows.
+    const { data: claimed } = await this.supabase.getAdminClient()
+      .from('quotations')
+      .update({ status: 'converted' })
+      .eq('id', id)
+      .eq('company_id', companyId)
+      .neq('status', 'converted')
+      .select()
+      .maybeSingle();
+    if (!claimed) throw new BadRequestException('Quotation already converted');
+
+    try {
+      const invoice = await this.invoices.create(companyId, userId, {
+        contact_id: quote.contact_id,
+        lead_id: quote.lead_id,
+        line_items: quote.line_items,
+        tax_rate: quote.tax_rate,
+        discount: quote.discount,
+        currency: quote.currency,
+        notes: quote.notes,
+      });
+      await this.update(companyId, id, { converted_invoice_id: invoice.id });
+      return invoice;
+    } catch (err) {
+      // Release the claim so the quotation isn't stuck "converted" with no invoice.
+      await this.supabase.getAdminClient()
+        .from('quotations').update({ status: quote.status }).eq('id', id);
+      throw err;
+    }
   }
 
   async delete(companyId: string, id: string) {

@@ -2,6 +2,7 @@ import {
   Controller, Get, Post, Patch, Delete, Param, Body, Query,
   UseGuards, Request, Ip, UsePipes, ValidationPipe,
 } from '@nestjs/common';
+import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { FormsService } from './forms.service';
 import { SupabaseService } from '../common/supabase.service';
@@ -27,6 +28,8 @@ export class FormsController {
   }
 
   @Post('public/:slug/submit')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UsePipes(new ValidationPipe({ whitelist: false, forbidNonWhitelisted: false }))
   async submit(@Param('slug') slug: string, @Body() data: any, @Ip() ip: string) {
     return this.service.submitForm(slug, data, ip);

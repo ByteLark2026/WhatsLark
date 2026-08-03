@@ -6,7 +6,9 @@ export class ContactsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async list(companyId: string, opts: { search?: string; tag?: string; page?: number; limit?: number } = {}) {
-    const { search, tag, page = 1, limit = 50 } = opts;
+    const { search, tag } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 50;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
@@ -89,7 +91,14 @@ export class ContactsService {
     return { imported: data?.length, data };
   }
 
+  private async assertOwnedContact(companyId: string, contactId: string) {
+    const { data } = await this.supabase.getAdminClient()
+      .from('contacts').select('id').eq('id', contactId).eq('company_id', companyId).maybeSingle();
+    if (!data) throw new NotFoundException('Contact not found');
+  }
+
   async addTag(companyId: string, contactId: string, tagId: string) {
+    await this.assertOwnedContact(companyId, contactId);
     await this.supabase.getAdminClient()
       .from('contact_tags')
       .upsert({ contact_id: contactId, tag_id: tagId });
@@ -97,6 +106,7 @@ export class ContactsService {
   }
 
   async removeTag(companyId: string, contactId: string, tagId: string) {
+    await this.assertOwnedContact(companyId, contactId);
     await this.supabase.getAdminClient()
       .from('contact_tags')
       .delete()

@@ -1,12 +1,18 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase.service';
+import { ScoringService } from '../scoring/scoring.service';
 
 @Injectable()
 export class LeadsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly scoring: ScoringService,
+  ) {}
 
   async list(companyId: string, opts: { stage?: string; assigned_to?: string; page?: number; limit?: number } = {}) {
-    const { stage, assigned_to, page = 1, limit = 50 } = opts;
+    const { stage, assigned_to } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 50;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
@@ -168,34 +174,8 @@ export class LeadsService {
   }
 
   async applyScoreAfterMutation(companyId: string, leadId: string): Promise<void> {
-    const { data: lead } = await this.supabase.getAdminClient()
-      .from('leads')
-      .select('stage, deal_value, notes, contacts(email)')
-      .eq('id', leadId)
-      .eq('company_id', companyId)
-      .single();
-
-    if (!lead) return;
-
-    const STAGE_PTS: Record<string, number> = { new_lead: 5, qualified: 15, quotation_sent: 20, negotiation: 35, won: 50, lost: 0 };
-    const contact = Array.isArray(lead.contacts) ? lead.contacts[0] : lead.contacts;
-
-    let score = STAGE_PTS[lead.stage || 'new_lead'] ?? 5;
-    const dv = lead.deal_value || 0;
-    if (dv >= 100000) score += 40;
-    else if (dv >= 20000) score += 35;
-    else if (dv >= 5000) score += 25;
-    else if (dv >= 1000) score += 15;
-    else if (dv > 0) score += 5;
-    if (contact?.email) score += 5;
-    if (lead.notes?.trim()) score += 5;
-    score = Math.min(100, score);
-
-    const grade = score >= 70 ? 'hot' : score >= 40 ? 'warm' : score >= 15 ? 'cold' : 'dead';
-    await this.supabase.getAdminClient()
-      .from('leads')
-      .update({ score, score_grade: grade })
-      .eq('id', leadId)
-      .eq('company_id', companyId);
+    // Delegates to ScoringService so there is exactly one scoring formula in the app
+    // (previously this duplicated a slightly different formula from ScoringService).
+    await this.scoring.applyScore(companyId, leadId);
   }
 }

@@ -12,7 +12,9 @@ export class ConversationsService {
     page?: number;
     limit?: number;
   } = {}) {
-    const { status, assigned_to, search, page = 1, limit = 30 } = filters;
+    const { status, assigned_to, search } = filters;
+    const page = filters.page || 1;
+    const limit = filters.limit || 30;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
@@ -79,7 +81,9 @@ export class ConversationsService {
     return data;
   }
 
-  async getMessages(companyId: string, conversationId: string, page = 1, limit = 50) {
+  async getMessages(companyId: string, conversationId: string, page?: number, limit?: number) {
+    page = page || 1;
+    limit = limit || 50;
     const offset = (page - 1) * limit;
 
     const { data, error, count } = await this.supabase.getAdminClient()

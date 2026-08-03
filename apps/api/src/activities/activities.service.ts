@@ -13,7 +13,9 @@ export class ActivitiesService {
     page?: number;
     limit?: number;
   } = {}) {
-    const { contact_id, lead_id, type, incomplete_only, page = 1, limit = 50 } = opts;
+    const { contact_id, lead_id, type, incomplete_only } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 50;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()

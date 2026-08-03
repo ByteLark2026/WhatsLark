@@ -1,4 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+async function requireAuth(req: NextRequest): Promise<boolean> {
+  const auth = req.headers.get('authorization');
+  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!token) return false;
+
+  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const { data, error } = await supabase.auth.getUser(token);
+  return !error && !!data.user;
+}
 
 const SYSTEM_PROMPT = `You are an automation flow builder for WhatsLark, a WhatsApp CRM platform.
 Help users create automation flows by understanding their requirements in plain language.
@@ -68,6 +79,10 @@ Rules:
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await requireAuth(req))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { message, history = [] } = await req.json();
     const openaiKey = process.env.OPENAI_API_KEY;
 

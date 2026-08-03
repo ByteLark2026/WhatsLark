@@ -30,7 +30,11 @@ function gradeFromScore(score: number): string {
 export class ScoringService {
   constructor(private readonly supabase: SupabaseService) {}
 
-  computeScore(lead: { stage?: string; deal_value?: number | null; notes?: string | null }, contact?: { email?: string | null }): {
+  computeScore(
+    lead: { stage?: string; deal_value?: number | null; notes?: string | null; expected_close_date?: string | null },
+    contact?: { email?: string | null },
+    customRules: { name: string; event_type: string; condition: any; points: number }[] = [],
+  ): {
     score: number;
     grade: string;
     factors: { label: string; points: number }[];
@@ -46,8 +50,48 @@ export class ScoringService {
     if (contact?.email) factors.push({ label: 'Has email', points: 5 });
     if (lead.notes?.trim()) factors.push({ label: 'Has notes', points: 5 });
 
+    for (const rule of customRules) {
+      if (this.ruleMatches(rule, lead, contact)) {
+        factors.push({ label: `Rule: ${rule.name}`, points: rule.points });
+      }
+    }
+
     const score = Math.min(100, factors.reduce((sum, f) => sum + f.points, 0));
     return { score, grade: gradeFromScore(score), factors };
+  }
+
+  private ruleMatches(
+    rule: { event_type: string; condition: any },
+    lead: { stage?: string; deal_value?: number | null; expected_close_date?: string | null },
+    contact?: { email?: string | null },
+  ): boolean {
+    switch (rule.event_type) {
+      case 'has_email':
+        return !!contact?.email;
+      case 'has_close_date':
+        return !!lead.expected_close_date;
+      case 'stage':
+        return rule.condition?.stage ? lead.stage === rule.condition.stage : false;
+      case 'deal_value': {
+        const val = lead.deal_value ?? 0;
+        const min = rule.condition?.min ?? -Infinity;
+        const max = rule.condition?.max ?? Infinity;
+        return val >= min && val <= max;
+      }
+      case 'manual':
+        return false; // manual rules only apply via explicit manual score adjustment, not auto-recompute
+      default:
+        return false;
+    }
+  }
+
+  private async getActiveRules(companyId: string) {
+    const { data } = await this.supabase.getAdminClient()
+      .from('scoring_rules')
+      .select('name, event_type, condition, points')
+      .eq('company_id', companyId)
+      .eq('is_active', true);
+    return data || [];
   }
 
   async applyScore(companyId: string, leadId: string): Promise<void> {
@@ -61,7 +105,8 @@ export class ScoringService {
     if (!lead) return;
 
     const contact = Array.isArray(lead.contacts) ? lead.contacts[0] : lead.contacts;
-    const { score, grade } = this.computeScore(lead, contact);
+    const rules = await this.getActiveRules(companyId);
+    const { score, grade } = this.computeScore(lead, contact, rules);
 
     await this.supabase.getAdminClient()
       .from('leads')
@@ -73,14 +118,15 @@ export class ScoringService {
   async recalculateAll(companyId: string): Promise<{ updated: number }> {
     const { data: leads } = await this.supabase.getAdminClient()
       .from('leads')
-      .select('id, stage, deal_value, notes, contacts(email)')
+      .select('id, stage, deal_value, notes, expected_close_date, contacts(email)')
       .eq('company_id', companyId);
 
     if (!leads?.length) return { updated: 0 };
 
+    const rules = await this.getActiveRules(companyId);
     const updates = leads.map((lead) => {
       const contact = Array.isArray(lead.contacts) ? lead.contacts[0] : lead.contacts;
-      const { score, grade } = this.computeScore(lead, contact);
+      const { score, grade } = this.computeScore(lead, contact, rules);
       return { id: lead.id, score, score_grade: grade };
     });
 
@@ -147,7 +193,9 @@ export class ScoringService {
   }
 
   async getScoredLeads(companyId: string, opts: { grade?: string; page?: number; limit?: number } = {}) {
-    const { grade, page = 1, limit = 50 } = opts;
+    const { grade } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 50;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()

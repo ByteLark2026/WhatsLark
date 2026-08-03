@@ -42,11 +42,13 @@ export class AiService {
     const settings = await this.getSettings(companyId);
     if (!settings.is_enabled) return '';
 
-    // Get last N messages for context
+    // Get last N messages for context — scoped to the caller's own company so a
+    // guessed/leaked conversation_id from another tenant can't be used to exfiltrate it.
     const { data: messages } = await this.supabase.getAdminClient()
       .from('messages')
       .select('direction, content, created_at')
       .eq('conversation_id', conversationId)
+      .eq('company_id', companyId)
       .eq('is_note', false)
       .order('created_at', { ascending: false })
       .limit(10);

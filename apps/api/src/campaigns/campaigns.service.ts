@@ -23,7 +23,8 @@ export class CampaignsService {
   }
 
   async list(companyId: string, opts: { page?: number; limit?: number } = {}) {
-    const { page = 1, limit = 20 } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 20;
     const offset = (page - 1) * limit;
 
     const { data, error, count } = await this.supabase.getAdminClient()
@@ -93,10 +94,17 @@ export class CampaignsService {
       throw new BadRequestException('Campaign cannot be launched in its current state');
     }
 
-    await this.supabase.getAdminClient()
+    // Atomic claim so double-clicking Launch / a retry can't enqueue two send jobs —
+    // only the caller whose UPDATE sees status still draft/scheduled wins the race.
+    const { data: claimed } = await this.supabase.getAdminClient()
       .from('campaigns')
       .update({ status: 'running', started_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('company_id', companyId)
+      .in('status', ['draft', 'scheduled'])
+      .select()
+      .maybeSingle();
+    if (!claimed) throw new BadRequestException('Campaign cannot be launched in its current state');
 
     // Enqueue campaign job
     await this.campaignQueue.add('send-campaign', { campaignId: id, companyId }, {
@@ -117,6 +125,7 @@ export class CampaignsService {
   }
 
   async getRecipients(companyId: string, campaignId: string) {
+    await this.get(companyId, campaignId); // throws NotFoundException if not owned by this company
     const { data } = await this.supabase.getAdminClient()
       .from('campaign_recipients')
       .select('*, contacts (id, name, phone)')

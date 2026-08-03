@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase.service';
+import { decryptToken } from '../common/token-crypto.util';
 
 @Injectable()
 export class EcommerceService {
@@ -197,7 +198,9 @@ export class EcommerceService {
 
   // ── Products list ─────────────────────────────────────────────────────────────
   async listProducts(companyId: string, opts: { connectionId?: string; search?: string; page?: number; limit?: number }) {
-    const { connectionId, search, page = 1, limit = 30 } = opts;
+    const { connectionId, search } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 30;
     let q = this.db()
       .from('ecommerce_products')
       .select('id, connection_id, external_id, name, price, compare_price, image_url, product_url, sku, stock_status, ecommerce_connections(platform, store_name)', { count: 'exact' })
@@ -214,7 +217,9 @@ export class EcommerceService {
 
   // ── Order events ──────────────────────────────────────────────────────────────
   async listOrderEvents(companyId: string, opts: { connectionId?: string; event_type?: string; page?: number; limit?: number }) {
-    const { connectionId, event_type, page = 1, limit = 30 } = opts;
+    const { connectionId, event_type } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 30;
     let q = this.db()
       .from('ecommerce_order_events')
       .select('*, ecommerce_connections(platform, store_name)', { count: 'exact' })
@@ -247,6 +252,18 @@ export class EcommerceService {
 
     if (!mapped) return { ignored: true };
 
+    // Skip if this exact (connection, order, event) was already processed — stores
+    // routinely retry webhook delivery on slow responses/non-2xx, which would otherwise
+    // create duplicate events and re-send the customer notification.
+    const { data: existing } = await this.db()
+      .from('ecommerce_order_events')
+      .select('id')
+      .eq('connection_id', connectionId)
+      .eq('external_order_id', String(mapped.order_id))
+      .eq('event_type', mapped.event_type)
+      .maybeSingle();
+    if (existing) return { ok: true, duplicate: true, event_type: mapped.event_type, order_id: mapped.order_id };
+
     // Insert order event
     const { data: orderEvent, error } = await this.db()
       .from('ecommerce_order_events')
@@ -268,7 +285,10 @@ export class EcommerceService {
       .select('id')
       .single();
 
-    if (error) throw new BadRequestException(error.message);
+    if (error) {
+      if ((error as any).code === '23505') return { ok: true, duplicate: true, event_type: mapped.event_type, order_id: mapped.order_id };
+      throw new BadRequestException(error.message);
+    }
 
     // Fire WhatsApp notification if channel configured
     if (opts.accessToken && opts.phoneNumberId && mapped.phone) {
@@ -425,6 +445,7 @@ export class EcommerceService {
       .eq('is_active', true)
       .limit(1)
       .single();
+    if (data?.access_token) data.access_token = decryptToken(data.access_token);
     return data;
   }
 }

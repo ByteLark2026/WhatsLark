@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import axios from 'axios';
 import { SupabaseService } from '../common/supabase.service';
+import { encryptToken, decryptToken } from '../common/token-crypto.util';
 
 const CHANNEL_SELECT =
   'id, name, phone_number, phone_number_id, business_account_id, webhook_verify_token, meta_app_id, is_active, created_at, updated_at';
@@ -45,6 +46,7 @@ export class WhatsAppService {
       business_account_id: string;
       access_token: string;
       meta_app_id?: string;
+      app_secret?: string;
     },
   ) {
     const companyId = await this.getCompanyId(userId);
@@ -78,9 +80,10 @@ export class WhatsAppService {
         phone_number: dto.phone_number,
         phone_number_id: dto.phone_number_id,
         business_account_id: dto.business_account_id,
-        access_token: dto.access_token,
+        access_token: encryptToken(dto.access_token),
         webhook_verify_token: verifyToken,
         meta_app_id: dto.meta_app_id || null,
+        app_secret: dto.app_secret ? encryptToken(dto.app_secret) : null,
         is_active: true,
       })
       .select(CHANNEL_SELECT)
@@ -100,6 +103,7 @@ export class WhatsAppService {
       business_account_id?: string;
       access_token?: string;
       meta_app_id?: string;
+      app_secret?: string;
       is_active?: boolean;
     },
   ) {
@@ -117,7 +121,7 @@ export class WhatsAppService {
 
     // If credentials changed, re-validate against Meta
     const newPhoneNumberId = dto.phone_number_id ?? existing.phone_number_id;
-    const newToken = dto.access_token ?? existing.access_token;
+    const newToken = dto.access_token ?? decryptToken(existing.access_token);
     if (dto.access_token || dto.phone_number_id) {
       try {
         await axios.get(
@@ -144,8 +148,9 @@ export class WhatsAppService {
     if (dto.phone_number !== undefined) update.phone_number = dto.phone_number;
     if (dto.phone_number_id !== undefined) update.phone_number_id = dto.phone_number_id;
     if (dto.business_account_id !== undefined) update.business_account_id = dto.business_account_id;
-    if (dto.access_token !== undefined) update.access_token = dto.access_token;
+    if (dto.access_token !== undefined) update.access_token = encryptToken(dto.access_token);
     if (dto.meta_app_id !== undefined) update.meta_app_id = dto.meta_app_id || null;
+    if (dto.app_secret !== undefined) update.app_secret = dto.app_secret ? encryptToken(dto.app_secret) : null;
     if (dto.is_active !== undefined) update.is_active = dto.is_active;
 
     const { data, error } = await this.supabase.getAdminClient()
@@ -192,6 +197,19 @@ export class WhatsAppService {
 
     if (error) throw new BadRequestException(error.message);
     return data;
+  }
+
+  /** Ownership-checked entry point for user-triggered sends (controller-facing). */
+  async sendTextMessageAsUser(userId: string, channelId: string, to: string, text: string): Promise<string> {
+    const companyId = await this.getCompanyId(userId);
+    const { data: owned } = await this.supabase.getAdminClient()
+      .from('whatsapp_channels')
+      .select('id')
+      .eq('id', channelId)
+      .eq('company_id', companyId)
+      .maybeSingle();
+    if (!owned) throw new NotFoundException('Channel not found');
+    return this.sendTextMessage(channelId, to, text);
   }
 
   async sendTextMessage(channelId: string, to: string, text: string): Promise<string> {
@@ -261,7 +279,7 @@ export class WhatsAppService {
       .eq('id', channelId)
       .single();
     if (error || !data) throw new NotFoundException('Channel not found');
-    return data;
+    return this.decryptChannelSecrets(data);
   }
 
   async getChannelByPhoneNumberId(phoneNumberId: string) {
@@ -270,7 +288,15 @@ export class WhatsAppService {
       .select('*')
       .eq('phone_number_id', phoneNumberId)
       .maybeSingle();
-    return data;
+    return data ? this.decryptChannelSecrets(data) : data;
+  }
+
+  private decryptChannelSecrets<T extends { access_token?: string; app_secret?: string | null }>(channel: T): T {
+    return {
+      ...channel,
+      access_token: channel.access_token ? decryptToken(channel.access_token) : channel.access_token,
+      app_secret: channel.app_secret ? decryptToken(channel.app_secret) : channel.app_secret,
+    };
   }
 
   private generateVerifyToken(): string {

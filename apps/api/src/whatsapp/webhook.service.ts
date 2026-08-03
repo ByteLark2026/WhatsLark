@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { SupabaseService } from '../common/supabase.service';
 import { WhatsAppService } from './whatsapp.service';
 
@@ -21,6 +22,36 @@ export class WhatsAppWebhookService {
       .limit(1)
       .maybeSingle();
     return !!data;
+  }
+
+  /**
+   * Verifies Meta's X-Hub-Signature-256 HMAC against the channel's app_secret.
+   * Channels created before app_secret existed have none set — for those we log a
+   * loud warning but allow the request through, rather than breaking existing integrations.
+   */
+  async verifySignature(body: any, rawBody: Buffer | undefined, signatureHeader: string | undefined): Promise<boolean> {
+    const phoneNumberId: string | undefined = body?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+    if (!phoneNumberId) return true; // no message payload to forge (e.g. test pings) — let processWebhook's own checks handle it
+
+    const channel = await this.whatsapp.getChannelByPhoneNumberId(phoneNumberId);
+    if (!channel?.app_secret) {
+      this.logger.warn(`Webhook signature not verified: no app_secret configured for phone_number_id ${phoneNumberId}`);
+      return true;
+    }
+
+    if (!signatureHeader || !rawBody) {
+      this.logger.error(`Webhook rejected: missing signature or raw body for phone_number_id ${phoneNumberId}`);
+      return false;
+    }
+
+    const expected = 'sha256=' + createHmac('sha256', channel.app_secret).update(rawBody).digest('hex');
+    const a = Buffer.from(expected);
+    const b = Buffer.from(signatureHeader);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      this.logger.error(`Webhook rejected: signature mismatch for phone_number_id ${phoneNumberId}`);
+      return false;
+    }
+    return true;
   }
 
   async processWebhook(body: any) {
@@ -82,11 +113,19 @@ export class WhatsAppWebhookService {
 
     if (!contact) return;
 
-    // Find or create conversation
-    let conversation = await this.findOrCreateConversation(companyId, contact.id, channel.id);
-
     // Extract message content
     const { type, content, mediaUrl } = this.extractContent(msg);
+
+    // Honor STOP/UNSUBSCRIBE as an opt-out — blocked contacts are skipped by campaign sends.
+    if (type === 'text' && ['stop', 'unsubscribe', 'opt out', 'optout'].includes(content.trim().toLowerCase())) {
+      await this.supabase.getAdminClient()
+        .from('contacts')
+        .update({ is_blocked: true })
+        .eq('id', contact.id);
+    }
+
+    // Find or create conversation
+    let conversation = await this.findOrCreateConversation(companyId, contact.id, channel.id);
 
     // Save message
     const { data: message } = await this.supabase.getAdminClient()

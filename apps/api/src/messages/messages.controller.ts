@@ -2,11 +2,12 @@ import { Controller, Post, Get, Delete, Body, Param, UseGuards } from '@nestjs/c
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { MessagesService } from './messages.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CompanyGuard } from '../common/guards/company.guard';
 import { CurrentUser, CurrentCompanyId } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Messages')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CompanyGuard)
 @Controller('messages')
 export class MessagesController {
   constructor(private readonly service: MessagesService) {}

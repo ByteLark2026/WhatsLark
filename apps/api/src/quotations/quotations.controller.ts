@@ -1,5 +1,8 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CompanyGuard } from '../common/guards/company.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { QuotationsService } from './quotations.service';
 import { SupabaseService } from '../common/supabase.service';
 
@@ -86,7 +89,8 @@ export class QuotationsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, CompanyGuard, RolesGuard)
+  @Roles('owner', 'admin', 'manager')
   async delete(@Request() req: any, @Param('id') id: string) {
     const companyId = await this.getCompanyId(req.user.id);
     return this.service.delete(companyId, id);

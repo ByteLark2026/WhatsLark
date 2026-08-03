@@ -3,11 +3,12 @@ import {
   Body, Param, Query, UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CompanyGuard } from '../common/guards/company.guard';
 import { CurrentCompanyId } from '../common/decorators/current-user.decorator';
 import { ScoringService } from './scoring.service';
 
 @Controller('scoring')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CompanyGuard)
 export class ScoringController {
   constructor(private readonly service: ScoringService) {}
 

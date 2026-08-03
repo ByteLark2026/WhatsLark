@@ -2,11 +2,12 @@ import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nes
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TemplatesService } from './templates.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CompanyGuard } from '../common/guards/company.guard';
 import { CurrentCompanyId } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Templates')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CompanyGuard)
 @Controller('templates')
 export class TemplatesController {
   constructor(private readonly service: TemplatesService) {}

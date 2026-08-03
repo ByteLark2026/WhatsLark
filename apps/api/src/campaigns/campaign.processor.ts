@@ -34,7 +34,7 @@ export class CampaignProcessor {
     // (status enum has no 'pending' value; wa_message_id=null means not yet sent to WhatsApp)
     const { data: recipients } = await this.supabase.getAdminClient()
       .from('campaign_recipients')
-      .select('*, contacts (phone, name)')
+      .select('*, contacts (phone, name, is_blocked)')
       .eq('campaign_id', campaignId)
       .eq('status', 'sent')
       .is('wa_message_id', null);
@@ -65,6 +65,16 @@ export class CampaignProcessor {
       if (check?.status === 'paused') {
         this.logger.log(`Campaign ${campaignId} paused at ${sentCount} sent`);
         break;
+      }
+
+      if (recipient.contacts?.is_blocked) {
+        this.logger.warn(`Skipping recipient ${recipient.id}: contact is blocked`);
+        await this.supabase.getAdminClient()
+          .from('campaign_recipients')
+          .update({ status: 'failed', error_message: 'Contact is blocked', failed_at: new Date().toISOString() })
+          .eq('id', recipient.id);
+        failedCount++;
+        continue;
       }
 
       const phone = (recipient.contacts?.phone || '').replace(/\D/g, '');

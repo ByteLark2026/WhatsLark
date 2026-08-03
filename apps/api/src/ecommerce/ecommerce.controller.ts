@@ -1,7 +1,9 @@
 import {
   Controller, Get, Post, Patch, Delete, Param, Body, Query,
-  UseGuards, Request, Headers, Logger, UsePipes, ValidationPipe,
+  UseGuards, Request, Req, Headers, Logger, UsePipes, ValidationPipe, UnauthorizedException,
 } from '@nestjs/common';
+import { Request as ExpressRequest } from 'express';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { EcommerceService } from './ecommerce.service';
 import { SupabaseService } from '../common/supabase.service';
@@ -97,12 +99,14 @@ export class EcommerceController {
   async woocommerceWebhook(
     @Param('connectionId') connectionId: string,
     @Headers('x-wc-webhook-topic') topic: string,
+    @Headers('x-wc-webhook-signature') signature: string,
     @Body() payload: any,
+    @Req() req: ExpressRequest,
   ) {
     this.logger.log(`[WC webhook] connectionId=${connectionId} topic=${topic} keys=${Object.keys(payload || {}).join(',')}`);
     const conn = await this.getConnectionWithSecret(connectionId);
     if (!conn) { this.logger.warn(`[WC webhook] connection not found: ${connectionId}`); return { ignored: true }; }
-    // connectionId UUID acts as the secret — no additional header check needed
+    this.verifyStoreSignature(conn, signature, (req as any).rawBody, 'base64');
     const channel = await this.service.getDefaultChannel(conn.company_id);
     this.logger.log(`[WC webhook] channel=${channel?.id} phone=${payload?.billing?.phone}`);
     return this.service.handleStoreWebhook({
@@ -122,10 +126,13 @@ export class EcommerceController {
   async shopifyWebhook(
     @Param('connectionId') connectionId: string,
     @Headers('x-shopify-topic') topic: string,
+    @Headers('x-shopify-hmac-sha256') signature: string,
     @Body() payload: any,
+    @Req() req: ExpressRequest,
   ) {
     const conn = await this.getConnectionWithSecret(connectionId);
     if (!conn) return { ignored: true };
+    this.verifyStoreSignature(conn, signature, (req as any).rawBody, 'base64');
     const channel = await this.service.getDefaultChannel(conn.company_id);
     return this.service.handleStoreWebhook({
       connectionId,
@@ -137,6 +144,22 @@ export class EcommerceController {
       accessToken: channel?.access_token,
       phoneNumberId: channel?.phone_number_id,
     });
+  }
+
+  /** Verifies the store's HMAC signature against the connection's stored webhook_secret. */
+  private verifyStoreSignature(conn: { webhook_secret?: string }, signatureHeader: string | undefined, rawBody: Buffer | undefined, encoding: 'base64' | 'hex') {
+    if (!conn.webhook_secret) {
+      this.logger.warn('Store webhook signature not verified: no webhook_secret configured for this connection');
+      return;
+    }
+    if (!signatureHeader || !rawBody) throw new UnauthorizedException('Missing webhook signature');
+
+    const expected = createHmac('sha256', conn.webhook_secret).update(rawBody).digest(encoding);
+    const a = Buffer.from(expected);
+    const b = Buffer.from(signatureHeader);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
   }
 
   private async getConnectionWithSecret(connectionId: string) {

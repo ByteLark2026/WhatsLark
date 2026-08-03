@@ -79,7 +79,8 @@ export class FormsService {
   }
 
   async getSubmissions(companyId: string, formId: string, opts: { page?: number; limit?: number }) {
-    const { page = 1, limit = 50 } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 50;
     const { data, error, count } = await this.db()
       .from('form_submissions')
       .select('id, data, contact_id, lead_id, ip_address, submitted_at', { count: 'exact' })

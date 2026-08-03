@@ -3,11 +3,12 @@ import {
   Body, Param, Query, Request, UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CompanyGuard } from '../common/guards/company.guard';
 import { CurrentCompanyId } from '../common/decorators/current-user.decorator';
 import { ActivitiesService } from './activities.service';
 
 @Controller('activities')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CompanyGuard)
 export class ActivitiesController {
   constructor(private readonly service: ActivitiesService) {}
 

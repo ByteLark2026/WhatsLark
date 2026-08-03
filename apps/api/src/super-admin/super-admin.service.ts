@@ -6,7 +6,9 @@ export class SuperAdminService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async listCompanies(opts: { page?: number; limit?: number; status?: string } = {}) {
-    const { page = 1, limit = 20, status } = opts;
+    const { status } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 20;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
@@ -55,7 +57,8 @@ export class SuperAdminService {
   }
 
   async listUsers(opts: { page?: number; limit?: number } = {}) {
-    const { page = 1, limit = 50 } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 50;
     const offset = (page - 1) * limit;
 
     const { data, error, count } = await this.supabase.getAdminClient()
@@ -123,7 +126,9 @@ export class SuperAdminService {
   }
 
   async listChannels(opts: { page?: number; limit?: number; search?: string } = {}) {
-    const { page = 1, limit = 20, search } = opts;
+    const { search } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 20;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
@@ -140,7 +145,9 @@ export class SuperAdminService {
   }
 
   async listAllCampaigns(opts: { page?: number; limit?: number; status?: string } = {}) {
-    const { page = 1, limit = 20, status } = opts;
+    const { status } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 20;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
@@ -157,7 +164,9 @@ export class SuperAdminService {
   }
 
   async listAllTemplates(opts: { page?: number; limit?: number; status?: string } = {}) {
-    const { page = 1, limit = 20, status } = opts;
+    const { status } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 20;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
@@ -174,7 +183,9 @@ export class SuperAdminService {
   }
 
   async listAllContacts(opts: { page?: number; limit?: number; search?: string } = {}) {
-    const { page = 1, limit = 50, search } = opts;
+    const { search } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 50;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
@@ -191,7 +202,9 @@ export class SuperAdminService {
   }
 
   async listMessageLogs(opts: { page?: number; limit?: number; status?: string; direction?: string } = {}) {
-    const { page = 1, limit = 50, status, direction } = opts;
+    const { status, direction } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 50;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()

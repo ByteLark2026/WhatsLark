@@ -2,11 +2,12 @@ import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards } from
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ConversationsService } from './conversations.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CompanyGuard } from '../common/guards/company.guard';
 import { CurrentUser, CurrentCompanyId } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Conversations')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CompanyGuard)
 @Controller('conversations')
 export class ConversationsController {
   constructor(private readonly service: ConversationsService) {}

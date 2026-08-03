@@ -19,7 +19,9 @@ export class SupportTicketsService {
 
   async list(userId: string, opts: { page?: number; limit?: number; status?: string } = {}) {
     const companyId = await this.getCompanyId(userId);
-    const { page = 1, limit = 20, status } = opts;
+    const { status } = opts;
+    const page = opts.page || 1;
+    const limit = opts.limit || 20;
     const offset = (page - 1) * limit;
 
     let query = this.supabase.getAdminClient()
