@@ -5,6 +5,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { InvoicesService } from './invoices.service';
 import { SupabaseService } from '../common/supabase.service';
+import { resolveCompanyId } from '../common/company-cache.util';
 
 @Controller('invoices')
 export class InvoicesController {
@@ -14,9 +15,7 @@ export class InvoicesController {
   ) {}
 
   private async getCompanyId(userId: string): Promise<string> {
-    const { data } = await this.supabase.getAdminClient()
-      .from('company_users').select('company_id').eq('user_id', userId).eq('is_active', true).limit(1).single();
-    return data?.company_id;
+    return resolveCompanyId(this.supabase.getAdminClient(), userId);
   }
 
   // Public — no auth (MUST be before :id)

@@ -7,6 +7,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { EcommerceService } from './ecommerce.service';
 import { SupabaseService } from '../common/supabase.service';
+import { resolveCompanyId } from '../common/company-cache.util';
 
 @Controller('ecommerce')
 export class EcommerceController {
@@ -18,9 +19,7 @@ export class EcommerceController {
   ) {}
 
   private async getCompanyId(userId: string): Promise<string> {
-    const { data } = await this.supabase.getAdminClient()
-      .from('company_users').select('company_id').eq('user_id', userId).eq('is_active', true).limit(1).single();
-    return data?.company_id;
+    return resolveCompanyId(this.supabase.getAdminClient(), userId);
   }
 
   // ── Connections ──────────────────────────────────────────────────────────────

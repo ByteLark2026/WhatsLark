@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import axios from 'axios';
 import { SupabaseService } from '../common/supabase.service';
 import { encryptToken, decryptToken } from '../common/token-crypto.util';
+import { resolveCompanyId } from '../common/company-cache.util';
 
 const CHANNEL_SELECT =
   'id, name, phone_number, phone_number_id, business_account_id, webhook_verify_token, meta_app_id, is_active, created_at, updated_at';
@@ -13,17 +14,10 @@ export class WhatsAppService {
 
   constructor(private readonly supabase: SupabaseService) {}
 
-  // Resolve company_id for the current user (CompanyMiddleware is not registered)
   async getCompanyId(userId: string): Promise<string> {
-    const { data, error } = await this.supabase.getAdminClient()
-      .from('company_users')
-      .select('company_id')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .limit(1)
-      .single();
-    if (error || !data) throw new ForbiddenException('No active company found for this user');
-    return data.company_id;
+    const companyId = await resolveCompanyId(this.supabase.getAdminClient(), userId);
+    if (!companyId) throw new ForbiddenException('No active company found for this user');
+    return companyId;
   }
 
   async getChannels(userId: string) {

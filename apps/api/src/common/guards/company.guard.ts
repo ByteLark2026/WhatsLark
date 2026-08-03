@@ -1,5 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { SupabaseService } from '../supabase.service';
+import { resolveCompanyId } from '../company-cache.util';
 
 /**
  * Resolves the caller's active company_id and attaches it to the request.
@@ -17,17 +18,8 @@ export class CompanyGuard implements CanActivate {
     if (!userId) return true;
 
     const requestedId = (request.query?.company_id as string) || (request.headers?.['x-company-id'] as string);
-
-    const { data } = await this.supabase.getAdminClient()
-      .from('company_users')
-      .select('company_id')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .eq(requestedId ? 'company_id' : 'is_active', requestedId || true)
-      .limit(1)
-      .single();
-
-    if (data) request.companyId = data.company_id;
+    const companyId = await resolveCompanyId(this.supabase.getAdminClient(), userId, requestedId);
+    if (companyId) request.companyId = companyId;
     return true;
   }
 }

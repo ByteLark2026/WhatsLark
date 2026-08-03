@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { SupabaseService } from '../common/supabase.service';
+import { resolveCompanyId } from '../common/company-cache.util';
 
 @Injectable()
 export class CampaignsService {
@@ -11,15 +12,9 @@ export class CampaignsService {
   ) {}
 
   async getCompanyId(userId: string): Promise<string> {
-    const { data, error } = await this.supabase.getAdminClient()
-      .from('company_users')
-      .select('company_id')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .limit(1)
-      .single();
-    if (error || !data) throw new ForbiddenException('No active company found for this user');
-    return data.company_id;
+    const companyId = await resolveCompanyId(this.supabase.getAdminClient(), userId);
+    if (!companyId) throw new ForbiddenException('No active company found for this user');
+    return companyId;
   }
 
   async list(companyId: string, opts: { page?: number; limit?: number } = {}) {

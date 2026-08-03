@@ -1,20 +1,15 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase.service';
+import { resolveCompanyId } from '../common/company-cache.util';
 
 @Injectable()
 export class SupportTicketsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   private async getCompanyId(userId: string): Promise<string> {
-    const { data, error } = await this.supabase.getAdminClient()
-      .from('company_users')
-      .select('company_id')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .limit(1)
-      .single();
-    if (error || !data) throw new ForbiddenException('No active company found for this user');
-    return data.company_id;
+    const companyId = await resolveCompanyId(this.supabase.getAdminClient(), userId);
+    if (!companyId) throw new ForbiddenException('No active company found for this user');
+    return companyId;
   }
 
   async list(userId: string, opts: { page?: number; limit?: number; status?: string } = {}) {

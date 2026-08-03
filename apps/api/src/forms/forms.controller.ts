@@ -6,6 +6,7 @@ import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { FormsService } from './forms.service';
 import { SupabaseService } from '../common/supabase.service';
+import { resolveCompanyId } from '../common/company-cache.util';
 
 @Controller('forms')
 export class FormsController {
@@ -15,9 +16,7 @@ export class FormsController {
   ) {}
 
   private async getCompanyId(userId: string): Promise<string> {
-    const { data } = await this.supabase.getAdminClient()
-      .from('company_users').select('company_id').eq('user_id', userId).eq('is_active', true).limit(1).single();
-    return data?.company_id;
+    return resolveCompanyId(this.supabase.getAdminClient(), userId);
   }
 
   // Public endpoints — no auth (MUST be before :id routes)
