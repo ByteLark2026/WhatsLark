@@ -31,6 +31,81 @@ export class WhatsAppService {
     return data;
   }
 
+  /**
+   * WhatsApp Embedded Signup — the frontend runs Meta's FB.login() flow and
+   * hands us back the short-lived `code` plus the phone_number_id/waba_id the
+   * user picked. We exchange the code for a token server-side (needs the App
+   * Secret, never exposed to the browser), register the number, pull its
+   * display info, subscribe our app to the WABA, then create the channel via
+   * the same addChannel() path as manual entry — same validation, same encryption.
+   */
+  async completeEmbeddedSignup(userId: string, dto: { code: string; phone_number_id: string; waba_id: string }) {
+    const appId = process.env.META_APP_ID;
+    const appSecret = process.env.META_APP_SECRET;
+    if (!appId || !appSecret) {
+      throw new BadRequestException('META_APP_ID / META_APP_SECRET not configured on the server.');
+    }
+
+    // 1. Exchange the auth code for an access token.
+    let accessToken: string;
+    try {
+      const tokenRes = await axios.get(`${this.baseUrl}/${this.apiVersion}/oauth/access_token`, {
+        params: { client_id: appId, client_secret: appSecret, code: dto.code },
+      });
+      accessToken = tokenRes.data.access_token;
+      if (!accessToken) throw new Error('No access_token in response');
+    } catch (err: any) {
+      throw new BadRequestException(`Failed to exchange embedded signup code: ${err.response?.data?.error?.message || err.message}`);
+    }
+
+    // 2. Register the phone number for Cloud API messaging (required before it can send/receive).
+    try {
+      await axios.post(
+        `${this.baseUrl}/${this.apiVersion}/${dto.phone_number_id}/register`,
+        { messaging_product: 'whatsapp', pin: '000000' },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+    } catch (err: any) {
+      // Already registered is fine (common on reconnect) — anything else, surface it.
+      const msg = err.response?.data?.error?.message || '';
+      if (!/already/i.test(msg)) {
+        throw new BadRequestException(`Failed to register phone number: ${msg || err.message}`);
+      }
+    }
+
+    // 3. Subscribe our app to this WABA so we actually receive webhooks for it.
+    try {
+      await axios.post(
+        `${this.baseUrl}/${this.apiVersion}/${dto.waba_id}/subscribed_apps`,
+        {},
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+    } catch (err: any) {
+      throw new BadRequestException(`Failed to subscribe to WhatsApp Business Account: ${err.response?.data?.error?.message || err.message}`);
+    }
+
+    // 4. Pull display info for the channel row.
+    let displayPhone = dto.phone_number_id;
+    let verifiedName = 'WhatsApp Business';
+    try {
+      const infoRes = await axios.get(
+        `${this.baseUrl}/${this.apiVersion}/${dto.phone_number_id}?fields=display_phone_number,verified_name`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      displayPhone = infoRes.data.display_phone_number || displayPhone;
+      verifiedName = infoRes.data.verified_name || verifiedName;
+    } catch { /* non-fatal — channel still gets created with placeholder values */ }
+
+    return this.addChannel(userId, {
+      name: verifiedName,
+      phone_number: displayPhone,
+      phone_number_id: dto.phone_number_id,
+      business_account_id: dto.waba_id,
+      access_token: accessToken,
+      meta_app_id: appId,
+    });
+  }
+
   async addChannel(
     userId: string,
     dto: {

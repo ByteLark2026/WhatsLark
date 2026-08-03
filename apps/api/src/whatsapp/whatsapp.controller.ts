@@ -26,6 +26,15 @@ export class WhatsAppController {
   }
 
   @Roles('owner', 'admin')
+  @Post('embedded-signup')
+  completeEmbeddedSignup(
+    @CurrentUser('id') userId: string,
+    @Body() dto: { code: string; phone_number_id: string; waba_id: string },
+  ) {
+    return this.whatsapp.completeEmbeddedSignup(userId, dto);
+  }
+
+  @Roles('owner', 'admin')
   @Patch(':id')
   updateChannel(
     @CurrentUser('id') userId: string,

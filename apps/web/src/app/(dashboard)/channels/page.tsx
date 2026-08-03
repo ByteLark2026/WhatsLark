@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Plus, Phone, CheckCircle, XCircle, Copy, MoreHorizontal,
   Loader2, Eye, EyeOff, RefreshCw, Wifi, WifiOff, Activity,
@@ -44,6 +44,86 @@ export default function ChannelsPage() {
   const [diagnosing, setDiagnosing] = useState(false);
   const [diagResult, setDiagResult] = useState<any>(null);
   const [diagTestTo, setDiagTestTo] = useState('');
+  const [connectingMeta, setConnectingMeta] = useState(false);
+  const signupDataRef = useRef<{ phone_number_id?: string; waba_id?: string }>({});
+
+  // Load the Facebook JS SDK once, for WhatsApp Embedded Signup.
+  useEffect(() => {
+    const appId = process.env.NEXT_PUBLIC_META_APP_ID;
+    if (!appId || (window as any).FB) return;
+
+    (window as any).fbAsyncInit = () => {
+      (window as any).FB.init({ appId, autoLogAppEvents: true, xfbml: false, version: 'v21.0' });
+    };
+    const script = document.createElement('script');
+    script.src = 'https://connect.facebook.net/en_US/sdk.js';
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+
+  // Embedded Signup sends the picked phone_number_id/waba_id via postMessage,
+  // separately from the FB.login() callback which delivers the auth code.
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (!event.origin.endsWith('facebook.com')) return;
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'WA_EMBEDDED_SIGNUP' && data.event === 'FINISH') {
+          signupDataRef.current = { phone_number_id: data.data.phone_number_id, waba_id: data.data.waba_id };
+        }
+      } catch { /* not a JSON message we care about */ }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const handleConnectMeta = () => {
+    const appId = process.env.NEXT_PUBLIC_META_APP_ID;
+    const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
+    const FB = (window as any).FB;
+    if (!appId || !configId || !FB) {
+      toast({ title: 'Not configured', description: 'Meta App ID / Config ID are not set up yet — use "Add channel manually" instead.', variant: 'destructive' });
+      return;
+    }
+
+    signupDataRef.current = {};
+    setConnectingMeta(true);
+
+    FB.login(
+      async (response: any) => {
+        if (response.authResponse?.code) {
+          const code = response.authResponse.code;
+          // The postMessage FINISH event can arrive slightly before or after this callback — wait briefly for it.
+          for (let i = 0; i < 20 && !signupDataRef.current.phone_number_id; i++) {
+            await new Promise((r) => setTimeout(r, 250));
+          }
+          const { phone_number_id, waba_id } = signupDataRef.current;
+          if (!phone_number_id || !waba_id) {
+            setConnectingMeta(false);
+            toast({ title: 'Signup incomplete', description: 'No phone number was selected. Try again.', variant: 'destructive' });
+            return;
+          }
+          try {
+            const created = await api.post<WhatsAppChannel>('/channels/embedded-signup', { code, phone_number_id, waba_id });
+            setChannels((prev) => [created, ...prev]);
+            toast({ title: 'WhatsApp connected!', description: created.name });
+          } catch (err: any) {
+            toast({ title: 'Connection failed', description: err.message, variant: 'destructive' });
+          } finally {
+            setConnectingMeta(false);
+          }
+        } else {
+          setConnectingMeta(false);
+        }
+      },
+      {
+        config_id: configId,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: { sessionInfoVersion: '3' },
+      },
+    );
+  };
 
   const webhookUrl =
     typeof window !== 'undefined'
@@ -229,7 +309,15 @@ export default function ChannelsPage() {
       <Header
         title="WhatsApp Channels"
         subtitle="Connect your WhatsApp Business numbers"
-        actions={<Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-2" />Add channel</Button>}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={handleConnectMeta} disabled={connectingMeta}>
+              {connectingMeta ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Connect WhatsApp
+            </Button>
+            <Button size="sm" variant="outline" onClick={openAdd}><Plus className="w-4 h-4 mr-2" />Add manually</Button>
+          </div>
+        }
       />
 
       <div className="p-4 sm:p-6 space-y-6">
