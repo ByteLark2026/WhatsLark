@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, MessageSquare, Users, TrendingUp, Megaphone,
-  FileText, Zap, Bot, Phone, UserCog, Settings, LogOut, ChevronDown,
+  FileText, Zap, Bot, Phone, PhoneCall, UserCog, Settings, LogOut, ChevronDown,
   Shield, BarChart2, Code2, LifeBuoy, ShoppingBag, PieChart, Calendar, FormInput,
   Briefcase, Target, FolderKanban, Activity, Award, Receipt, FileCheck,
 } from 'lucide-react';
@@ -13,9 +14,39 @@ import { useAuthStore } from '@/store/auth';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getInitials } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { ChannelSwitcher } from './channel-switcher';
+
+function CallAvailabilityToggle() {
+  const [available, setAvailable] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const toggle = async () => {
+    setLoading(true);
+    const next = !available;
+    try {
+      await api.patch('/voice/agents/availability', { is_available: next });
+      setAvailable(next);
+    } catch {
+      // Voice calling not set up for this company — toggle silently stays off.
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between px-3 py-2 text-sidebar-foreground/80">
+      <div className="flex items-center gap-2 text-xs">
+        <Phone className="w-3.5 h-3.5" />
+        Available for calls
+      </div>
+      <Switch checked={available} onCheckedChange={toggle} disabled={loading} className="scale-90" />
+    </div>
+  );
+}
 
 const navSections = [
   {
@@ -71,6 +102,7 @@ const navSections = [
     label: 'Admin',
     items: [
       { href: '/channels', label: 'Channels', icon: Phone },
+      { href: '/settings/voice', label: 'Voice', icon: PhoneCall },
       { href: '/team', label: 'Team', icon: UserCog },
       { href: '/ai-bot', label: 'AI Bot', icon: Bot },
       { href: '/widget-builder', label: 'Widget Builder', icon: Code2 },
@@ -136,6 +168,10 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
           </div>
         ))}
       </nav>
+
+      <div className="border-t border-sidebar-border">
+        <CallAvailabilityToggle />
+      </div>
 
       {/* User menu */}
       <div className="px-3 py-3 border-t border-sidebar-border">

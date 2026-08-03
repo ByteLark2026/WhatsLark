@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Phone, Mail, MessageSquare, Edit2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Phone, PhoneCall, Mail, MessageSquare, Edit2, Loader2 } from 'lucide-react';
+import { useTwilioDevice } from '@/hooks/use-twilio-device';
+import { ActivityTimeline } from '@/components/activity-timeline';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +24,7 @@ export default function ContactDetailPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { company } = useAuthStore();
+  const { makeCall } = useTwilioDevice();
   const [contact, setContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
@@ -153,6 +156,14 @@ export default function ContactDetailPage() {
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button variant="outline" onClick={openEdit} className="flex-1 sm:flex-none"><Edit2 className="w-4 h-4 mr-2" />Edit</Button>
+          <Button
+            variant="outline"
+            className="flex-1 sm:flex-none"
+            onClick={() => makeCall(contact.phone, { contact_id: contact.id }).catch((err: any) =>
+              toast({ title: 'Call failed', description: err.message, variant: 'destructive' }))}
+          >
+            <PhoneCall className="w-4 h-4 mr-2" />Call
+          </Button>
           <Button onClick={handleMessage} disabled={messaging} className="flex-1 sm:flex-none">
             {messaging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MessageSquare className="w-4 h-4 mr-2" />}
             Message
@@ -206,6 +217,11 @@ export default function ContactDetailPage() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-6">
+        <h2 className="font-semibold text-sm mb-3">Activity</h2>
+        <ActivityTimeline contactId={contact.id} />
       </div>
 
       <Dialog open={showEdit} onOpenChange={setShowEdit}>

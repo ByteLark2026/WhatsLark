@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Send, MoreVertical, UserCheck, CheckCheck, Check, Clock, AlertCircle,
-  StickyNote, ArrowLeft, Phone, WifiOff, Zap, Package, X, Search,
+  StickyNote, ArrowLeft, Phone, PhoneCall, WifiOff, Zap, Package, X, Search,
 } from 'lucide-react';
+import { useTwilioDevice } from '@/hooks/use-twilio-device';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,7 @@ const statusIcon: Record<MessageStatus, React.ReactNode> = {
 export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
   const { toast } = useToast();
   const { user, company } = useAuthStore();
+  const { makeCall } = useTwilioDevice();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -176,6 +178,17 @@ export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {contact?.phone && (
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Call"
+              onClick={() => makeCall(contact.phone, { contact_id: contact.id }).catch((err: any) =>
+                toast({ title: 'Call failed', description: err.message, variant: 'destructive' }))}
+            >
+              <PhoneCall className="w-4 h-4" />
+            </Button>
+          )}
           <Badge variant={conversation.status === 'open' ? 'success' : conversation.status === 'pending' ? 'warning' : 'secondary'}>
             {conversation.status}
           </Badge>

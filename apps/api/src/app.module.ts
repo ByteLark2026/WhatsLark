@@ -29,6 +29,7 @@ import { ScoringModule } from './scoring/scoring.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { QuotationsModule } from './quotations/quotations.module';
 import { WidgetModule } from './widget/widget.module';
+import { VoiceModule } from './voice/voice.module';
 
 @Module({
   controllers: [AppController],
@@ -75,6 +76,7 @@ import { WidgetModule } from './widget/widget.module';
     InvoicesModule,
     QuotationsModule,
     WidgetModule,
+    VoiceModule,
   ],
 })
 export class AppModule {}

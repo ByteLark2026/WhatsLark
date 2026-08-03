@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, DollarSign, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -29,6 +30,7 @@ const STAGES: { stage: LeadStage; label: string; color: string; bg: string }[] =
 
 export default function LeadsPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const { company } = useAuthStore();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -132,13 +134,22 @@ export default function LeadsPage() {
                       <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
                     ))
                   ) : stageLeads.map((lead) => (
-                    <Card key={lead.id} className="hover:shadow-md transition-shadow">
+                    <Card
+                      key={lead.id}
+                      className="hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => router.push(`/leads/${lead.id}`)}
+                    >
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-medium text-sm">{lead.title}</p>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 -mt-1 -mr-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 -mt-1 -mr-1 shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <MoreHorizontal className="w-3.5 h-3.5" />
                               </Button>
                             </DropdownMenuTrigger>

@@ -9,6 +9,8 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth';
 import { createClient } from '@/lib/supabase';
+import { TwilioDeviceProvider } from '@/hooks/use-twilio-device';
+import { CallBar } from '@/components/voice/call-bar';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -53,6 +55,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
+    <TwilioDeviceProvider>
     <div className="flex h-screen overflow-hidden">
       <Sidebar className="hidden lg:flex" />
 
@@ -80,6 +83,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
       <Toaster />
+      <CallBar />
     </div>
+    </TwilioDeviceProvider>
   );
 }
