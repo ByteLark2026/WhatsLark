@@ -315,6 +315,7 @@ export class EcommerceService {
   }
 
   private mapWooEvent(topic: string, p: any) {
+    if (!p?.id) return null; // no order id — nothing we can key an event on
     const billing = p.billing || {};
     const phone = this.normalizePhone(billing.phone);
     const base = {
@@ -338,6 +339,7 @@ export class EcommerceService {
   }
 
   private mapShopifyEvent(topic: string, p: any) {
+    if (!p?.id) return null; // no order id — nothing we can key an event on
     const phone = this.normalizePhone(p.phone || p.billing_address?.phone || p.shipping_address?.phone);
     const base = {
       order_id: p.id,
