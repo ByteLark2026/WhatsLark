@@ -77,12 +77,32 @@ export default function ChannelsPage() {
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  const handleConnectMeta = () => {
+  const handleConnectMeta = async () => {
     const appId = process.env.NEXT_PUBLIC_META_APP_ID;
     const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
-    const FB = (window as any).FB;
-    if (!appId || !configId || !FB) {
-      toast({ title: 'Not configured', description: 'Meta App ID / Config ID are not set up yet — use "Add channel manually" instead.', variant: 'destructive' });
+
+    if (!appId || !configId) {
+      toast({
+        title: 'Not configured',
+        description: `Missing env var(s): ${[!appId && 'NEXT_PUBLIC_META_APP_ID', !configId && 'NEXT_PUBLIC_META_CONFIG_ID'].filter(Boolean).join(', ')}. Set on Vercel and redeploy, or use "Add manually".`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // The FB SDK script loads async — if the button is clicked right after page
+    // load it may not be ready yet. Wait briefly instead of failing immediately.
+    let FB = (window as any).FB;
+    for (let i = 0; i < 20 && !FB; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      FB = (window as any).FB;
+    }
+    if (!FB) {
+      toast({
+        title: 'Facebook SDK failed to load',
+        description: 'Check for an ad-blocker/privacy extension blocking connect.facebook.net, or a Content-Security-Policy blocking it.',
+        variant: 'destructive',
+      });
       return;
     }
 
