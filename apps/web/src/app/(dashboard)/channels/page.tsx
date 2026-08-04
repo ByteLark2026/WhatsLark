@@ -77,7 +77,7 @@ export default function ChannelsPage() {
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  const handleConnectMeta = async () => {
+  const handleConnectMeta = () => {
     const appId = process.env.NEXT_PUBLIC_META_APP_ID;
     const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
 
@@ -90,17 +90,14 @@ export default function ChannelsPage() {
       return;
     }
 
-    // The FB SDK script loads async — if the button is clicked right after page
-    // load it may not be ready yet. Wait briefly instead of failing immediately.
-    let FB = (window as any).FB;
-    for (let i = 0; i < 20 && !FB; i++) {
-      await new Promise((r) => setTimeout(r, 250));
-      FB = (window as any).FB;
-    }
+    // Must call FB.login() synchronously within this click handler — any `await`
+    // before it breaks the browser's "trusted user gesture" chain and the login
+    // popup gets silently blocked (this bit us once already: don't reintroduce it).
+    const FB = (window as any).FB;
     if (!FB) {
       toast({
-        title: 'Facebook SDK failed to load',
-        description: 'Check for an ad-blocker/privacy extension blocking connect.facebook.net, or a Content-Security-Policy blocking it.',
+        title: 'Facebook SDK not ready',
+        description: 'Wait a couple seconds for the page to finish loading and try again. If it keeps happening, check for an ad-blocker/privacy extension blocking connect.facebook.net.',
         variant: 'destructive',
       });
       return;
