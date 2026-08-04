@@ -106,29 +106,14 @@ export default function ChannelsPage() {
     signupDataRef.current = {};
     setConnectingMeta(true);
 
+    // Facebook's SDK does its own internal typeof check on the login callback and
+    // rejects an `async function` outright ("Expression is of type asyncfunction,
+    // not function") even though async functions are perfectly callable — so this
+    // must be a plain function. All async work happens in the helper it calls.
     FB.login(
-      async (response: any) => {
+      (response: any) => {
         if (response.authResponse?.code) {
-          const code = response.authResponse.code;
-          // The postMessage FINISH event can arrive slightly before or after this callback — wait briefly for it.
-          for (let i = 0; i < 20 && !signupDataRef.current.phone_number_id; i++) {
-            await new Promise((r) => setTimeout(r, 250));
-          }
-          const { phone_number_id, waba_id } = signupDataRef.current;
-          if (!phone_number_id || !waba_id) {
-            setConnectingMeta(false);
-            toast({ title: 'Signup incomplete', description: 'No phone number was selected. Try again.', variant: 'destructive' });
-            return;
-          }
-          try {
-            const created = await api.post<WhatsAppChannel>('/channels/embedded-signup', { code, phone_number_id, waba_id });
-            setChannels((prev) => [created, ...prev]);
-            toast({ title: 'WhatsApp connected!', description: created.name });
-          } catch (err: any) {
-            toast({ title: 'Connection failed', description: err.message, variant: 'destructive' });
-          } finally {
-            setConnectingMeta(false);
-          }
+          finishEmbeddedSignup(response.authResponse.code);
         } else {
           setConnectingMeta(false);
         }
@@ -140,6 +125,28 @@ export default function ChannelsPage() {
         extras: { sessionInfoVersion: '3' },
       },
     );
+  };
+
+  const finishEmbeddedSignup = async (code: string) => {
+    // The postMessage FINISH event can arrive slightly before or after the login callback — wait briefly for it.
+    for (let i = 0; i < 20 && !signupDataRef.current.phone_number_id; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const { phone_number_id, waba_id } = signupDataRef.current;
+    if (!phone_number_id || !waba_id) {
+      setConnectingMeta(false);
+      toast({ title: 'Signup incomplete', description: 'No phone number was selected. Try again.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const created = await api.post<WhatsAppChannel>('/channels/embedded-signup', { code, phone_number_id, waba_id });
+      setChannels((prev) => [created, ...prev]);
+      toast({ title: 'WhatsApp connected!', description: created.name });
+    } catch (err: any) {
+      toast({ title: 'Connection failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setConnectingMeta(false);
+    }
   };
 
   const webhookUrl =
