@@ -68,7 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile top bar */}
-        <header className="flex items-center gap-3 px-4 py-3 border-b border-border bg-background lg:hidden">
+        <header className="flex items-center gap-3 px-4 py-3 border-b border-border bg-background/70 backdrop-blur-xl lg:hidden">
           <Button variant="ghost" size="icon" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
             <Menu className="w-5 h-5" />
           </Button>

@@ -63,7 +63,21 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(at 0% 0%, hsl(142 70% 49% / 0.14) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, hsl(217 91% 60% / 0.12) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, hsl(280 70% 60% / 0.10) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsl(142 70% 49% / 0.08) 0px, transparent 50%);
+    background-attachment: fixed;
+  }
+  .dark body {
+    background-image:
+      radial-gradient(at 0% 0%, hsl(142 70% 49% / 0.16) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, hsl(217 91% 60% / 0.16) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, hsl(280 70% 60% / 0.14) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsl(142 70% 49% / 0.10) 0px, transparent 50%);
   }
 }
 
