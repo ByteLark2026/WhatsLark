@@ -6,7 +6,7 @@ async function requireAuth(req: NextRequest): Promise<boolean> {
   const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) return false;
 
-  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const { data, error } = await supabase.auth.getUser(token);
   return !error && !!data.user;
 }
