@@ -399,10 +399,43 @@ export class EcommerceService {
     const body = messages[mapped.event_type as keyof typeof messages];
     if (!body) return;
 
+    // WhatsApp rejects freeform text sent to a customer outside the 24h session window —
+    // which order notifications always are, since they're the first contact. If the company
+    // has an approved template named after this event_type (e.g. "order_confirmed"), send
+    // that instead; the `body` text above still gets stored in our own DB for the timeline.
+    const templateParamBuilders: Record<string, (m: any) => string[]> = {
+      order_confirmed: (m) => [String(m.order_number), `${m.currency} ${m.total}`],
+    };
+    const buildParams = templateParamBuilders[mapped.event_type];
+    let template: { name: string; language: string; components: any[] } | null = null;
+    if (buildParams) {
+      const { data } = await this.db()
+        .from('message_templates')
+        .select('name, language, components')
+        .eq('company_id', companyId)
+        .eq('name', mapped.event_type)
+        .eq('status', 'approved')
+        .maybeSingle();
+      template = data;
+    }
+
+    const payload = template && buildParams
+      ? {
+          messaging_product: 'whatsapp', to, type: 'template',
+          template: {
+            name: template.name,
+            language: { code: template.language },
+            components: template.components?.some((c: any) => c.type === 'BODY')
+              ? [{ type: 'body', parameters: buildParams(mapped).map((text) => ({ type: 'text', text })) }]
+              : [],
+          },
+        }
+      : { messaging_product: 'whatsapp', to, type: 'text', text: { body } };
+
     const res = await fetch(`https://graph.facebook.com/${GRAPH_V}/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body } }),
+      body: JSON.stringify(payload),
     });
     const json = await res.json();
     const waId = json.messages?.[0]?.id;
