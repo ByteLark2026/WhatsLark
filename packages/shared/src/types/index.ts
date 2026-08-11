@@ -289,6 +289,7 @@ export interface Campaign extends BaseEntity {
 
 export interface MessageTemplate extends BaseEntity {
   company_id: string;
+  channel_id?: string | null;
   name: string;
   language: string;
   category: string;

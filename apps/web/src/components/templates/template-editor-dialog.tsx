@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth';
+import { useChannelStore } from '@/store/channel';
 import { useToast } from '@/hooks/use-toast';
 import type { MessageTemplate, TemplateComponent, TemplateButton } from '@whatslark/shared';
 
@@ -65,6 +66,7 @@ interface CardForm {
 
 export interface TemplateFormState {
   name: string;
+  channelId: string;
   language: string;
   category: string;
   templateType: TemplateType;
@@ -86,6 +88,7 @@ const blankCard = (): CardForm => ({ headerFormat: 'IMAGE', headerMediaUrl: '', 
 
 export const blankTemplateForm = (): TemplateFormState => ({
   name: '',
+  channelId: '',
   language: 'en',
   category: 'MARKETING',
   templateType: 'CUSTOM',
@@ -118,6 +121,7 @@ function fromButtonForm(b: ButtonForm): TemplateButton {
 export function parseTemplateToForm(tpl: MessageTemplate): TemplateFormState {
   const form = blankTemplateForm();
   form.name = tpl.name;
+  form.channelId = tpl.channel_id || '';
   form.language = tpl.language;
   form.category = tpl.category;
 
@@ -281,7 +285,7 @@ export function buildComponentsFromForm(form: TemplateFormState): TemplateCompon
 }
 
 export function isTemplateFormValid(form: TemplateFormState): boolean {
-  if (!form.name.trim() || !form.body.trim()) return false;
+  if (!form.name.trim() || !form.body.trim() || !form.channelId) return false;
   if (CAROUSEL_TYPES.includes(form.templateType)) {
     return form.cards.length > 0 && form.cards.every((c) => c.body.trim());
   }
@@ -556,11 +560,12 @@ interface TemplateEditorDialogProps {
   mode: 'create' | 'edit';
   initial?: MessageTemplate | null;
   saving: boolean;
-  onSave: (data: { name: string; language: string; category: string; components: TemplateComponent[] }) => void;
+  onSave: (data: { name: string; channel_id: string; language: string; category: string; components: TemplateComponent[] }) => void;
 }
 
 export function TemplateEditorDialog({ open, onOpenChange, mode, initial, saving, onSave }: TemplateEditorDialogProps) {
   const [form, setForm] = useState<TemplateFormState>(blankTemplateForm());
+  const channels = useChannelStore((s) => s.channels);
 
   useEffect(() => {
     if (!open) return;
@@ -587,6 +592,7 @@ export function TemplateEditorDialog({ open, onOpenChange, mode, initial, saving
   const handleSave = () => {
     onSave({
       name: form.name.trim().toLowerCase().replace(/\s+/g, '_'),
+      channel_id: form.channelId,
       language: form.language,
       category: form.category,
       components: buildComponentsFromForm(form),
@@ -608,6 +614,19 @@ export function TemplateEditorDialog({ open, onOpenChange, mode, initial, saving
               <Label>Template name *</Label>
               <Input placeholder="order_confirmation" value={form.name} onChange={(e) => set('name', e.target.value.toLowerCase().replace(/\s/g, '_'))} />
               <p className="text-xs text-muted-foreground">Lowercase, underscores only</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>WhatsApp channel *</Label>
+              <Select value={form.channelId} onValueChange={(v) => set('channelId', v)}>
+                <SelectTrigger><SelectValue placeholder="Which number is this template for?" /></SelectTrigger>
+                <SelectContent>
+                  {channels.map((ch) => (
+                    <SelectItem key={ch.id} value={ch.id}>{ch.name} · {ch.phone_number}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Templates are submitted to this channel's Meta account — must match the channel it'll actually be sent from.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

@@ -407,12 +407,16 @@ export class EcommerceService {
       order_confirmed: (m) => [String(m.order_number), `${m.currency} ${m.total}`],
     };
     const buildParams = templateParamBuilders[mapped.event_type];
+    // A template only works if it's approved on the SAME WABA that's about to send it —
+    // one submitted under a different channel exists on Meta's side but not this one,
+    // and the send fails with "Template name does not exist" despite being approved.
     let template: { name: string; language: string; components: any[] } | null = null;
-    if (buildParams) {
+    if (buildParams && channelId) {
       const { data } = await this.db()
         .from('message_templates')
         .select('name, language, components')
         .eq('company_id', companyId)
+        .eq('channel_id', channelId)
         .eq('name', mapped.event_type)
         .eq('status', 'approved')
         .maybeSingle();

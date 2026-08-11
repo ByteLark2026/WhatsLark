@@ -151,16 +151,18 @@ export async function POST(req: NextRequest) {
       .eq('company_id', company_id)
       .single();
     if (tplErr || !template) return NextResponse.json({ message: 'Template not found' }, { status: 404 });
+    if (!template.channel_id) {
+      return NextResponse.json({ message: 'This template has no WhatsApp channel assigned. Edit it and pick a channel before submitting.' }, { status: 400 });
+    }
 
     const { data: channel, error: chErr } = await adminSupabase
       .from('whatsapp_channels')
       .select('business_account_id, access_token, meta_app_id')
+      .eq('id', template.channel_id)
       .eq('company_id', company_id)
-      .eq('is_active', true)
-      .limit(1)
       .maybeSingle();
     if (chErr || !channel) {
-      return NextResponse.json({ message: 'No active WhatsApp channel connected. Connect one in Channels first.' }, { status: 400 });
+      return NextResponse.json({ message: 'This template\'s assigned WhatsApp channel no longer exists or is inactive.' }, { status: 400 });
     }
     channel.access_token = decryptToken(channel.access_token);
 

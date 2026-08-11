@@ -13,6 +13,7 @@ import { TemplateStatus } from '@whatslark/shared';
 import type { MessageTemplate, TemplateComponent } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
 import { TemplateEditorDialog } from '@/components/templates/template-editor-dialog';
+import { useChannelStore } from '@/store/channel';
 
 const statusIcon = {
   pending: <Clock className="w-3.5 h-3.5 text-yellow-600" />,
@@ -35,6 +36,8 @@ export default function TemplatesPage() {
   const [editTarget, setEditTarget] = useState<MessageTemplate | null>(null);
   const [saving, setSaving] = useState(false);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const channels = useChannelStore((s) => s.channels);
+  const channelNameById = Object.fromEntries(channels.map((c) => [c.id, `${c.name} · ${c.phone_number}`]));
 
   useEffect(() => {
     if (!company?.id) { setLoading(false); return; }
@@ -56,7 +59,7 @@ export default function TemplatesPage() {
 
   const closeEdit = () => setEditTarget(null);
 
-  const handleAdd = async (data: { name: string; language: string; category: string; components: TemplateComponent[] }) => {
+  const handleAdd = async (data: { name: string; channel_id: string; language: string; category: string; components: TemplateComponent[] }) => {
     if (!company?.id) return;
     setSaving(true);
     const supabase = createClient();
@@ -64,6 +67,7 @@ export default function TemplatesPage() {
       .from('message_templates')
       .insert({
         company_id: company.id,
+        channel_id: data.channel_id,
         name: data.name,
         language: data.language,
         category: data.category,
@@ -82,7 +86,7 @@ export default function TemplatesPage() {
     setSaving(false);
   };
 
-  const handleEdit = async (data: { name: string; language: string; category: string; components: TemplateComponent[] }) => {
+  const handleEdit = async (data: { name: string; channel_id: string; language: string; category: string; components: TemplateComponent[] }) => {
     if (!editTarget) return;
     setSaving(true);
     const supabase = createClient();
@@ -90,6 +94,7 @@ export default function TemplatesPage() {
       .from('message_templates')
       .update({
         name: data.name,
+        channel_id: data.channel_id,
         language: data.language,
         category: data.category,
         components: data.components,
@@ -115,6 +120,7 @@ export default function TemplatesPage() {
       .from('message_templates')
       .insert({
         company_id: company.id,
+        channel_id: tpl.channel_id,
         name: tpl.name + '_copy',
         language: tpl.language,
         category: tpl.category,
@@ -196,6 +202,9 @@ export default function TemplatesPage() {
                     <div>
                       <p className="font-semibold text-sm">{tpl.name}</p>
                       <p className="text-xs text-muted-foreground">{tpl.category} · {tpl.language.toUpperCase()}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {tpl.channel_id ? (channelNameById[tpl.channel_id] || 'Unknown channel') : <span className="text-amber-600">No channel assigned</span>}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1.5">
                       {statusIcon[tpl.status]}
