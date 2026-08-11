@@ -184,6 +184,7 @@ async function handleIncomingMessage(
     .limit(1);
 
   let conversation = conversations?.[0] ?? null;
+  const isNewConversation = !conversation;
 
   if (!conversation) {
     const { data: created } = await adminSupabase
@@ -254,6 +255,7 @@ async function handleIncomingMessage(
         messageText: type === 'text' ? content : '',
         accessToken: access_token,
         phoneNumberId: phone_number_id,
+        isNewConversation,
       }).catch((err) => console.error('[webhook] automation error:', err));
 
       // AI auto-reply (non-blocking — only fires if AI Bot enabled in settings)
@@ -432,12 +434,13 @@ type FlowCtx = {
 async function executeAutomations(ctx: {
   companyId: string; channelId: string; conversationId: string;
   contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
+  isNewConversation: boolean;
 }) {
   const { data: rules } = await adminSupabase
     .from('automation_rules')
     .select('*')
     .eq('company_id', ctx.companyId)
-    .in('trigger', ['message_received', 'keyword_matched'])
+    .in('trigger', ['message_received', 'keyword_matched', 'new_contact', 'new_conversation'])
     .eq('is_active', true);
 
   if (!rules?.length) return;
@@ -445,6 +448,11 @@ async function executeAutomations(ctx: {
   for (const rule of rules) {
     const config = rule.trigger_config || {};
     const lowerMsg = ctx.messageText.toLowerCase();
+
+    // new_contact/new_conversation only fire on the first message of a conversation —
+    // approximated here as "no prior open conversation existed" since we don't track a
+    // separate contact-creation event through this path.
+    if ((rule.trigger === 'new_contact' || rule.trigger === 'new_conversation') && !ctx.isNewConversation) continue;
 
     if (rule.trigger === 'keyword_matched') {
       if (!config.keywords?.length) continue;
@@ -469,8 +477,10 @@ async function executeFlow(rule: any, ctx: FlowCtx) {
   if (!nodes.length) return;
 
   const nodeMap = new Map(nodes.map((n: any) => [n.id, n]));
-  let currentId = 'start';
+  const startNode = nodes.find((n: any) => n.type === 'start');
+  let currentId = startNode?.id || '';
   const visited = new Set<string>();
+  if (!currentId) return;
 
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId);
