@@ -330,11 +330,18 @@ export class EcommerceService {
       tracking_url: p.meta_data?.find((m: any) => m.key === '_tracking_url')?.value || null,
       payment_method: p.payment_method_title || p.payment_method || null,
     };
+    // WooCommerce only ever sends topic = "order.created" | "order.updated" | "order.deleted" | "order.restored" —
+    // it does NOT send a distinct topic per status. Every status change (pending → processing → completed →
+    // cancelled → refunded) arrives as "order.updated"; the actual new status is in the payload body.
     if (topic.includes('created')) return { ...base, event_type: 'order_placed' as const };
-    if (topic.includes('processing')) return { ...base, event_type: 'order_confirmed' as const };
-    if (topic.includes('shipped') || topic.includes('completed')) return { ...base, event_type: 'order_shipped' as const };
-    if (topic.includes('cancelled')) return { ...base, event_type: 'order_cancelled' as const };
-    if (topic.includes('refunded')) return { ...base, event_type: 'order_refunded' as const };
+    if (topic.includes('updated')) {
+      const status = String(p.status || '').toLowerCase();
+      if (status === 'processing') return { ...base, event_type: 'order_confirmed' as const };
+      if (status === 'completed') return { ...base, event_type: 'order_shipped' as const };
+      if (status === 'cancelled' || status === 'failed') return { ...base, event_type: 'order_cancelled' as const };
+      if (status === 'refunded') return { ...base, event_type: 'order_refunded' as const };
+      return null;
+    }
     return null;
   }
 
