@@ -34,6 +34,7 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<MessageTemplate | null>(null);
+  const [duplicateSource, setDuplicateSource] = useState<MessageTemplate | null>(null);
   const [saving, setSaving] = useState(false);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const channels = useChannelStore((s) => s.channels);
@@ -81,6 +82,7 @@ export default function TemplatesPage() {
     } else {
       setTemplates((prev) => [created as unknown as MessageTemplate, ...prev]);
       setShowAdd(false);
+      setDuplicateSource(null);
       toast({ title: 'Template created — pending approval' });
     }
     setSaving(false);
@@ -113,28 +115,12 @@ export default function TemplatesPage() {
     setSaving(false);
   };
 
-  const handleDuplicate = async (tpl: MessageTemplate) => {
-    if (!company?.id) return;
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('message_templates')
-      .insert({
-        company_id: company.id,
-        channel_id: tpl.channel_id,
-        name: tpl.name + '_copy',
-        language: tpl.language,
-        category: tpl.category,
-        components: tpl.components,
-        status: 'pending',
-      })
-      .select()
-      .single();
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      setTemplates((prev) => [data as unknown as MessageTemplate, ...prev]);
-      toast({ title: 'Template duplicated' });
-    }
+  // "Duplicate for another channel" — same name and content are fine across channels
+  // (Meta only requires uniqueness per WABA), you just need to pick a different one.
+  // Reuses the normal create dialog/handleAdd path, pre-filled from the source template.
+  const openDuplicate = (tpl: MessageTemplate) => {
+    setDuplicateSource({ ...tpl, channel_id: null });
+    setShowAdd(true);
   };
 
   const handleSubmitForReview = async (tpl: MessageTemplate) => {
@@ -177,7 +163,7 @@ export default function TemplatesPage() {
       <Header
         title="Message Templates"
         subtitle="WhatsApp approved templates for campaigns"
-        actions={<Button size="sm" onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" />New template</Button>}
+        actions={<Button size="sm" onClick={() => { setDuplicateSource(null); setShowAdd(true); }}><Plus className="w-4 h-4 mr-2" />New template</Button>}
       />
 
       <div className="p-4 sm:p-6">
@@ -190,7 +176,7 @@ export default function TemplatesPage() {
             <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="font-semibold">No templates yet</h3>
             <p className="text-sm text-muted-foreground mt-1 mb-4">Create WhatsApp message templates for campaigns.</p>
-            <Button onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" />New template</Button>
+            <Button onClick={() => { setDuplicateSource(null); setShowAdd(true); }}><Plus className="w-4 h-4 mr-2" />New template</Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -222,7 +208,7 @@ export default function TemplatesPage() {
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem onClick={() => openEdit(tpl)}>Edit</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDuplicate(tpl)}>Duplicate</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openDuplicate(tpl)}>Duplicate for another channel</DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(tpl)}>Delete</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -251,9 +237,9 @@ export default function TemplatesPage() {
 
       <TemplateEditorDialog
         open={showAdd}
-        onOpenChange={setShowAdd}
+        onOpenChange={(open) => { setShowAdd(open); if (!open) setDuplicateSource(null); }}
         mode="create"
-        initial={null}
+        initial={duplicateSource}
         saving={saving}
         onSave={handleAdd}
       />
