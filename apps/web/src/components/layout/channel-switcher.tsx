@@ -46,8 +46,8 @@ export function ChannelSwitcher() {
           className={cn(
             'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium transition-colors',
             selectedChannelId === null
-              ? 'bg-sidebar-accent text-white'
-              : 'text-white hover:bg-sidebar-accent/40 hover:text-white',
+              ? 'bg-yellow-400 text-black'
+              : 'text-white hover:bg-yellow-400/20 hover:text-yellow-400',
           )}
         >
           <span className="w-2 h-2 rounded-full bg-white flex-shrink-0" />

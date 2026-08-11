@@ -155,8 +155,8 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
                     className={cn(
                       'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                       active
-                        ? 'bg-sidebar-accent text-white'
-                        : 'text-white hover:bg-sidebar-accent/50 hover:text-white',
+                        ? 'bg-yellow-400 text-black'
+                        : 'text-white hover:bg-yellow-400/20 hover:text-yellow-400',
                     )}
                   >
                     <Icon className="w-4 h-4 flex-shrink-0" />
