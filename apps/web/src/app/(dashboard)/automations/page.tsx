@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Header } from '@/components/layout/header';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -433,6 +433,9 @@ export default function AutomationsPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{templateCategory ? templateCategory.label : 'Agent category'}</DialogTitle>
+            <DialogDescription>
+              {templateCategory ? 'Pick a ready-made flow to start from.' : 'Choose the category closest to your business to see ready-made automation flows.'}
+            </DialogDescription>
           </DialogHeader>
           {!templateCategory ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -469,7 +472,10 @@ export default function AutomationsPage() {
 
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Create New Flow</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Create New Flow</DialogTitle>
+            <DialogDescription>Set up a blank automation flow — you'll build the steps in the flow editor next.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Flow name *</Label>
@@ -511,6 +517,7 @@ export default function AutomationsPage() {
               </div>
               Create Automation with AI
             </DialogTitle>
+            <DialogDescription className="sr-only">Describe the automation you want and the AI will build the flow for you.</DialogDescription>
           </DialogHeader>
 
           {/* Chat messages */}

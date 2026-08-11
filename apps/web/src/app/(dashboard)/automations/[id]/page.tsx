@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth';
@@ -899,6 +899,7 @@ export default function FlowEditorPage() {
             <DialogTitle className="flex items-center gap-2">
               <Play className="w-4 h-4 text-green-600" />Test Flow Simulation
             </DialogTitle>
+            <DialogDescription>Simulate an incoming message and step through how this flow would respond.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
