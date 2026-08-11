@@ -20,6 +20,14 @@ interface Connection {
   is_active: boolean;
   last_sync_at: string | null;
   webhook_secret?: string;
+  whatsapp_channel_id: string | null;
+}
+
+interface WhatsAppChannel {
+  id: string;
+  name: string;
+  phone_number: string;
+  is_active: boolean;
 }
 
 const PLATFORM_LABELS = { woocommerce: 'WooCommerce', shopify: 'Shopify' };
@@ -30,9 +38,11 @@ export default function IntegrationsPage() {
   const { toast } = useToast();
 
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [channels, setChannels] = useState<WhatsAppChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<Record<string, boolean>>({});
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
+  const [updatingChannel, setUpdatingChannel] = useState<Record<string, boolean>>({});
   const [showAdd, setShowAdd] = useState(false);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -45,20 +55,36 @@ export default function IntegrationsPage() {
     consumer_key: '',
     consumer_secret: '',
     api_access_token: '',
+    whatsapp_channel_id: '',
   });
 
   const load = async () => {
     setLoading(true);
     try {
-      const data = await api.get<Connection[]>('/ecommerce/connections');
-      setConnections(data || []);
+      const [conns, chs] = await Promise.all([
+        api.get<Connection[]>('/ecommerce/connections'),
+        api.get<WhatsAppChannel[]>('/channels'),
+      ]);
+      setConnections(conns || []);
+      setChannels((chs || []).filter((c) => c.is_active));
     } catch { /* empty */ }
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
-  const resetForm = () => setForm({ platform: 'woocommerce', store_name: '', store_url: '', consumer_key: '', consumer_secret: '', api_access_token: '' });
+  const resetForm = () => setForm({ platform: 'woocommerce', store_name: '', store_url: '', consumer_key: '', consumer_secret: '', api_access_token: '', whatsapp_channel_id: '' });
+
+  const handleChannelChange = async (connId: string, channelId: string) => {
+    setUpdatingChannel((s) => ({ ...s, [connId]: true }));
+    try {
+      const updated = await api.patch<Connection>(`/ecommerce/connections/${connId}`, { whatsapp_channel_id: channelId });
+      setConnections((cs) => cs.map((c) => (c.id === connId ? { ...c, whatsapp_channel_id: updated.whatsapp_channel_id } : c)));
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+    setUpdatingChannel((s) => ({ ...s, [connId]: false }));
+  };
 
   const testConnection = async () => {
     setTesting(true);
@@ -74,7 +100,7 @@ export default function IntegrationsPage() {
   const handleAdd = async () => {
     setSaving(true);
     try {
-      const conn = await api.post<Connection>('/ecommerce/connections', form);
+      const conn = await api.post<Connection>('/ecommerce/connections', { ...form, whatsapp_channel_id: form.whatsapp_channel_id || undefined });
       setConnections((c) => [...c, conn]);
       setShowAdd(false);
       resetForm();
@@ -175,6 +201,21 @@ export default function IntegrationsPage() {
                 {conn.last_sync_at && (
                   <p className="text-xs text-muted-foreground">Last sync: {new Date(conn.last_sync_at).toLocaleString()}</p>
                 )}
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Sends via:</span>
+                  <Select
+                    value={conn.whatsapp_channel_id || ''}
+                    onValueChange={(v) => handleChannelChange(conn.id, v)}
+                    disabled={updatingChannel[conn.id]}
+                  >
+                    <SelectTrigger className="h-7 text-xs w-auto min-w-[160px]"><SelectValue placeholder="Any active channel (unset)" /></SelectTrigger>
+                    <SelectContent>
+                      {channels.map((ch) => (
+                        <SelectItem key={ch.id} value={ch.id}>{ch.name} · {ch.phone_number}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setShowWebhook(conn)}>
@@ -218,6 +259,20 @@ export default function IntegrationsPage() {
             <div className="space-y-1.5">
               <Label>Store URL</Label>
               <Input placeholder={form.platform === 'woocommerce' ? 'https://mystore.com' : 'https://mystore.myshopify.com'} value={form.store_url} onChange={(e) => setForm((f) => ({ ...f, store_url: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>WhatsApp channel</Label>
+              <Select value={form.whatsapp_channel_id} onValueChange={(v) => setForm((f) => ({ ...f, whatsapp_channel_id: v }))}>
+                <SelectTrigger><SelectValue placeholder="Which number sends order updates?" /></SelectTrigger>
+                <SelectContent>
+                  {channels.map((ch) => (
+                    <SelectItem key={ch.id} value={ch.id}>{ch.name} · {ch.phone_number}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {channels.length === 0 && (
+                <p className="text-xs text-muted-foreground">No active WhatsApp channels yet — <a href="/channels" className="text-primary hover:underline">connect one first</a>.</p>
+              )}
             </div>
             {form.platform === 'woocommerce' ? (
               <>

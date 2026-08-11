@@ -12,7 +12,7 @@ export class EcommerceService {
   async listConnections(companyId: string) {
     const { data, error } = await this.db()
       .from('ecommerce_connections')
-      .select('id, platform, store_name, store_url, is_active, last_sync_at, created_at')
+      .select('id, platform, store_name, store_url, is_active, last_sync_at, created_at, whatsapp_channel_id')
       .eq('company_id', companyId)
       .order('created_at');
     if (error) throw new BadRequestException(error.message);
@@ -26,6 +26,7 @@ export class EcommerceService {
     consumer_key?: string;
     consumer_secret?: string;
     api_access_token?: string;
+    whatsapp_channel_id?: string;
   }) {
     const url = dto.store_url.replace(/\/$/, '');
     // Test connection before saving
@@ -35,7 +36,7 @@ export class EcommerceService {
     const { data, error } = await this.db()
       .from('ecommerce_connections')
       .insert({ company_id: companyId, ...dto, store_url: url, webhook_secret: webhookSecret })
-      .select('id, platform, store_name, store_url, is_active, webhook_secret')
+      .select('id, platform, store_name, store_url, is_active, webhook_secret, whatsapp_channel_id')
       .single();
     if (error) throw new BadRequestException(error.message);
     return data;
@@ -44,13 +45,14 @@ export class EcommerceService {
   async updateConnection(companyId: string, id: string, dto: Partial<{
     store_name: string; is_active: boolean;
     consumer_key: string; consumer_secret: string; api_access_token: string;
+    whatsapp_channel_id: string | null;
   }>) {
     const { data, error } = await this.db()
       .from('ecommerce_connections')
       .update(dto)
       .eq('id', id)
       .eq('company_id', companyId)
-      .select('id, platform, store_name, store_url, is_active')
+      .select('id, platform, store_name, store_url, is_active, whatsapp_channel_id')
       .single();
     if (error) throw new BadRequestException(error.message);
     return data;
@@ -456,5 +458,25 @@ export class EcommerceService {
       .single();
     if (data?.access_token) data.access_token = decryptToken(data.access_token);
     return data;
+  }
+
+  /** Uses the channel pinned to this store connection, if any; falls back to
+   *  getDefaultChannel() for connections created before that was an option. */
+  async getChannelForConnection(companyId: string, whatsappChannelId?: string | null) {
+    if (whatsappChannelId) {
+      const { data } = await this.db()
+        .from('whatsapp_channels')
+        .select('id, access_token, phone_number_id')
+        .eq('id', whatsappChannelId)
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (data) {
+        if (data.access_token) data.access_token = decryptToken(data.access_token);
+        return data;
+      }
+      // Pinned channel was deleted/deactivated — fall through to default.
+    }
+    return this.getDefaultChannel(companyId);
   }
 }

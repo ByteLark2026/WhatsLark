@@ -106,7 +106,7 @@ export class EcommerceController {
     const conn = await this.getConnectionWithSecret(connectionId);
     if (!conn) { this.logger.warn(`[WC webhook] connection not found: ${connectionId}`); return { ignored: true }; }
     this.verifyStoreSignature(conn, signature, (req as any).rawBody, 'base64');
-    const channel = await this.service.getDefaultChannel(conn.company_id);
+    const channel = await this.service.getChannelForConnection(conn.company_id, conn.whatsapp_channel_id);
     this.logger.log(`[WC webhook] channel=${channel?.id} phone=${payload?.billing?.phone}`);
     return this.service.handleStoreWebhook({
       connectionId,
@@ -132,7 +132,7 @@ export class EcommerceController {
     const conn = await this.getConnectionWithSecret(connectionId);
     if (!conn) return { ignored: true };
     this.verifyStoreSignature(conn, signature, (req as any).rawBody, 'base64');
-    const channel = await this.service.getDefaultChannel(conn.company_id);
+    const channel = await this.service.getChannelForConnection(conn.company_id, conn.whatsapp_channel_id);
     return this.service.handleStoreWebhook({
       connectionId,
       platform: 'shopify',
@@ -164,7 +164,7 @@ export class EcommerceController {
   private async getConnectionWithSecret(connectionId: string) {
     const { data } = await this.supabase.getAdminClient()
       .from('ecommerce_connections')
-      .select('id, company_id, platform, webhook_secret, is_active')
+      .select('id, company_id, platform, webhook_secret, is_active, whatsapp_channel_id')
       .eq('id', connectionId)
       .eq('is_active', true)
       .maybeSingle();
