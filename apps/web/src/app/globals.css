@@ -25,13 +25,13 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 142 70% 49%;
     --radius: 0.5rem;
-    --sidebar-background: 222 47% 11%;
+    --sidebar-background: 0 0% 0%;
     --sidebar-foreground: 210 40% 90%;
     --sidebar-primary: 142 70% 49%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 47% 16%;
+    --sidebar-accent: 0 0% 14%;
     --sidebar-accent-foreground: 210 40% 90%;
-    --sidebar-border: 222 47% 18%;
+    --sidebar-border: 0 0% 16%;
     --sidebar-ring: 142 70% 49%;
   }
 
