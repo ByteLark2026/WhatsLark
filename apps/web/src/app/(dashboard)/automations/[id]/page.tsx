@@ -349,8 +349,15 @@ export default function FlowEditorPage() {
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
     const steps: TestStep[] = [];
     let vars: Record<string, string> = {};
-    let currentId = 'start';
+    const startNode = nodes.find((n) => n.type === 'start');
+    let currentId = startNode?.id || '';
     const visited = new Set<string>();
+
+    if (!currentId) {
+      setTestSteps([{ nodeId: '', type: 'start', label: 'No start node found', result: 'skipped', detail: 'This flow has no START node — add one before testing.' }]);
+      setTestRan(true);
+      return;
+    }
 
     while (currentId && !visited.has(currentId)) {
       visited.add(currentId);
