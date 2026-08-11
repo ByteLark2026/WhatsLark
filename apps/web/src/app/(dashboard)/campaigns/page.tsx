@@ -291,7 +291,10 @@ export default function CampaignsPage() {
             { label: 'Total Recipients', value: stats.recipients.toLocaleString(), sub: `${campaigns.reduce((s, c) => s + (c.sent_count || 0), 0)} Sent` },
             { label: 'Delivery Rate', value: `${stats.deliveryRate}%`, sub: `${campaigns.reduce((s, c) => s + (c.delivered_count || 0), 0)} Delivered` },
             { label: 'Read Rate', value: `${stats.readRate}%`, sub: `${campaigns.reduce((s, c) => s + (c.read_count || 0), 0)} Read` },
-            { label: 'Failed Messages', value: stats.failed, sub: `${stats.total > 0 ? Math.round(stats.failed / (campaigns.reduce((s, c) => s + (c.sent_count || 0), 0) || 1) * 100) : 0}% Failed Rate` },
+            { label: 'Failed Messages', value: stats.failed, sub: (() => {
+              const attempted = campaigns.reduce((s, c) => s + (c.sent_count || 0) + (c.failed_count || 0), 0);
+              return `${attempted > 0 ? Math.round(stats.failed / attempted * 100) : 0}% Failed Rate`;
+            })() },
           ].map((s) => (
             <Card key={s.label}>
               <CardContent className="p-4">
