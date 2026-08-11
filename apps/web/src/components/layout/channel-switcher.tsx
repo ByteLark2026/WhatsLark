@@ -37,7 +37,7 @@ export function ChannelSwitcher() {
 
   return (
     <div className="px-3 py-2 border-b border-sidebar-border space-y-1">
-      <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
+      <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-white">
         Channel
       </p>
       <div className="space-y-0.5">
@@ -47,10 +47,10 @@ export function ChannelSwitcher() {
             'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium transition-colors',
             selectedChannelId === null
               ? 'bg-sidebar-accent text-white'
-              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground',
+              : 'text-white hover:bg-sidebar-accent/40 hover:text-white',
           )}
         >
-          <span className="w-2 h-2 rounded-full bg-sidebar-foreground/40 flex-shrink-0" />
+          <span className="w-2 h-2 rounded-full bg-white flex-shrink-0" />
           All channels
         </button>
         {channels.map((ch) => {
@@ -64,7 +64,7 @@ export function ChannelSwitcher() {
                 'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium transition-colors',
                 active
                   ? 'bg-sidebar-accent text-white'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground',
+                  : 'text-white hover:bg-sidebar-accent/40 hover:text-white',
               )}
             >
               <span

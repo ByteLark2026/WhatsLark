@@ -38,7 +38,7 @@ function CallAvailabilityToggle() {
   };
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 text-sidebar-foreground/80">
+    <div className="flex items-center justify-between px-3 py-2 text-white">
       <div className="flex items-center gap-2 text-xs">
         <Phone className="w-3.5 h-3.5" />
         Available for calls
@@ -129,7 +129,7 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
       {/* Logo */}
       <div className="flex items-center gap-2 px-6 py-4 border-b border-sidebar-border">
         <img src="/logo.png" alt="WhatsLark" className="h-10 w-auto object-contain" />
-        {company && <p className="text-xs text-sidebar-foreground/60 truncate max-w-[140px]">{company.name}</p>}
+        {company && <p className="text-xs text-white truncate max-w-[140px]">{company.name}</p>}
       </div>
 
       {/* Channel switcher */}
@@ -140,7 +140,7 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
         {navSections.map((section, si) => (
           <div key={si}>
             {section.label && (
-              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
+              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-white">
                 {section.label}
               </p>
             )}
@@ -156,7 +156,7 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
                       'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                       active
                         ? 'bg-sidebar-accent text-white'
-                        : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                        : 'text-white hover:bg-sidebar-accent/50 hover:text-white',
                     )}
                   >
                     <Icon className="w-4 h-4 flex-shrink-0" />
@@ -186,9 +186,9 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
               </Avatar>
               <div className="flex-1 text-left min-w-0">
                 <p className="text-sm font-medium text-white truncate">{user?.full_name || 'User'}</p>
-                <p className="text-xs text-sidebar-foreground/60 truncate">{user?.email}</p>
+                <p className="text-xs text-white truncate">{user?.email}</p>
               </div>
-              <ChevronDown className="w-4 h-4 text-sidebar-foreground/60 flex-shrink-0" />
+              <ChevronDown className="w-4 h-4 text-white flex-shrink-0" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
