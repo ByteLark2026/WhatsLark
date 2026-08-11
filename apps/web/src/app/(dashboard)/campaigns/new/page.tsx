@@ -73,7 +73,7 @@ export default function NewCampaignPage() {
     if (!company?.id) { setLoadingData(false); return; }
     const supabase = createClient();
     Promise.all([
-      supabase.from('message_templates').select('id, name, category, language, status, components').eq('company_id', company.id).eq('status', 'approved').order('name'),
+      supabase.from('message_templates').select('id, name, category, language, status, components, channel_id').eq('company_id', company.id).eq('status', 'approved').order('name'),
       supabase.from('whatsapp_channels').select('id, name, phone_number').eq('company_id', company.id).eq('is_active', true),
     ]).then(([tplRes, chRes]) => {
       if (tplRes.data) setTemplates(tplRes.data as unknown as MessageTemplate[]);
@@ -81,9 +81,17 @@ export default function NewCampaignPage() {
     }).finally(() => setLoadingData(false));
   }, [company?.id]);
 
+  // A template only sends successfully on the same WhatsApp channel it was approved on —
+  // one approved for a different channel exists on Meta's side but not this one, and the
+  // send fails with "Template name does not exist" despite showing as approved here.
+  const templatesForChannel = useMemo(
+    () => (form.channel_id ? templates.filter((t) => (t as any).channel_id === form.channel_id) : templates),
+    [templates, form.channel_id],
+  );
+
   const selectedTemplate = useMemo(
-    () => templates.find((t) => t.id === form.template_id) || null,
-    [templates, form.template_id],
+    () => templatesForChannel.find((t) => t.id === form.template_id) || null,
+    [templatesForChannel, form.template_id],
   );
 
   const bodyText = selectedTemplate ? templateBodyText((selectedTemplate as any).components || []) : '';
@@ -205,7 +213,7 @@ export default function NewCampaignPage() {
                     No active channels. <Link href="/channels" className="text-primary hover:underline">Connect one first.</Link>
                   </div>
                 ) : (
-                  <Select value={form.channel_id} onValueChange={(v) => setForm({ ...form, channel_id: v })}>
+                  <Select value={form.channel_id} onValueChange={(v) => setForm((f) => ({ ...f, channel_id: v, template_id: templates.find((t) => t.id === f.template_id && (t as any).channel_id === v) ? f.template_id : '' }))}>
                     <SelectTrigger><SelectValue placeholder="Select a channel…" /></SelectTrigger>
                     <SelectContent>
                       {channels.map((ch) => (
@@ -230,11 +238,17 @@ export default function NewCampaignPage() {
                   <div className="text-center py-4 text-sm text-muted-foreground">
                     No approved templates. <Link href="/templates" className="text-primary hover:underline">Create one first.</Link>
                   </div>
+                ) : !form.channel_id ? (
+                  <div className="text-center py-4 text-sm text-muted-foreground">Pick a channel first.</div>
+                ) : templatesForChannel.length === 0 ? (
+                  <div className="text-center py-4 text-sm text-muted-foreground">
+                    No approved templates for this channel. <Link href="/templates" className="text-primary hover:underline">Create one for it.</Link>
+                  </div>
                 ) : (
                   <Select value={form.template_id} onValueChange={(v) => setForm({ ...form, template_id: v })}>
                     <SelectTrigger><SelectValue placeholder="Select a template…" /></SelectTrigger>
                     <SelectContent>
-                      {templates.map((t) => (
+                      {templatesForChannel.map((t) => (
                         <SelectItem key={t.id} value={t.id}>
                           {t.name} <span className="text-muted-foreground ml-1">· {t.category} · {t.language.toUpperCase()}</span>
                         </SelectItem>

@@ -52,6 +52,17 @@ export class CampaignsService {
     contact_ids?: string[];
     scheduled_at?: string;
   }) {
+    const { data: template } = await this.supabase.getAdminClient()
+      .from('message_templates')
+      .select('channel_id')
+      .eq('id', dto.template_id)
+      .eq('company_id', companyId)
+      .single();
+    if (!template) throw new BadRequestException('Template not found');
+    if (template.channel_id !== dto.channel_id) {
+      throw new BadRequestException("This template wasn't approved for the selected channel — pick the matching channel, or create/approve a template for this one.");
+    }
+
     const { data: campaign, error } = await this.supabase.getAdminClient()
       .from('campaigns')
       .insert({
