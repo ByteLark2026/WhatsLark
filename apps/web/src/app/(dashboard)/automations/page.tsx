@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Zap, Activity, Pencil, Trash2, Sparkles, Send, Bot, User, Loader2, CheckCircle, Play, MessageSquare, FileText, Timer, GitBranch, Square } from 'lucide-react';
+import { Plus, Zap, Activity, Pencil, Trash2, Sparkles, Send, Bot, User, Loader2, CheckCircle, Play, MessageSquare, FileText, Timer, GitBranch, Square, GraduationCap, Briefcase, ShoppingBag, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -52,6 +52,95 @@ const TRIGGER_LABELS: Record<string, string> = {
   new_conversation: 'New conversation',
 };
 
+interface AgentTemplate {
+  name: string;
+  description: string;
+  prompt: string;
+}
+
+interface AgentCategory {
+  key: string;
+  label: string;
+  icon: typeof GraduationCap;
+  description: string;
+  templates: AgentTemplate[];
+}
+
+const AGENT_CATEGORIES: AgentCategory[] = [
+  {
+    key: 'edtech',
+    label: 'EdTech',
+    icon: GraduationCap,
+    description: 'Coaching, courses & admissions',
+    templates: [
+      {
+        name: 'New admission enquiry',
+        description: 'Welcomes the enquirer, asks which course and preferred start date, saves the details, and notifies the admissions team.',
+        prompt: 'When someone messages me for the first time, welcome them, ask which course they are interested in, then ask their preferred start date, save both answers as notes on the contact, and let them know an admissions counselor will follow up shortly.',
+      },
+      {
+        name: 'Course fee enquiry auto-reply',
+        description: 'Replies to fee/pricing questions with a short message and hands off to a human for details.',
+        prompt: 'When someone messages me asking about fees or pricing, reply that fee details vary by course and a counselor will share the exact breakdown shortly, then assign the conversation to an agent.',
+      },
+    ],
+  },
+  {
+    key: 'services',
+    label: 'Services / Agencies',
+    icon: Briefcase,
+    description: 'Freelancers, studios & client work',
+    templates: [
+      {
+        name: 'New client enquiry auto-reply',
+        description: 'Greets a new enquirer, asks what service they need and their budget, saves it, and notifies the team.',
+        prompt: 'When someone messages me for the first time, greet them, ask what service they are looking for, then ask their budget range, save both as notes on the contact, and tell them the team will get back to them within a few hours.',
+      },
+      {
+        name: 'Appointment confirmation',
+        description: 'Confirms a booked appointment/call back to the customer with the details they provided.',
+        prompt: 'When someone messages me to book a call or meeting, ask for their preferred date and time, save it as a note on the contact, and confirm we will reach out to lock in the slot.',
+      },
+    ],
+  },
+  {
+    key: 'retail',
+    label: 'Retail',
+    icon: ShoppingBag,
+    description: 'Showroom & product sales',
+    templates: [
+      {
+        name: 'Product enquiry auto-reply',
+        description: 'Asks which product the customer is interested in and saves it for the sales team to follow up.',
+        prompt: 'When someone messages me asking about a product, ask which product they are interested in and their preferred quantity, save both as notes on the contact, and let them know a team member will confirm availability and price shortly.',
+      },
+      {
+        name: 'Store hours & location',
+        description: 'Answers common location/hours questions automatically.',
+        prompt: 'When someone messages me asking about store hours or location, reply with a placeholder message telling them our hours and address, and ask if they would like directions.',
+      },
+    ],
+  },
+  {
+    key: 'enquiry_capturing',
+    label: 'Enquiry Capturing',
+    icon: ClipboardList,
+    description: 'Capture and qualify every inbound enquiry',
+    templates: [
+      {
+        name: 'Capture new enquiry details',
+        description: 'Asks for name and what they need, saves both to the contact, and notifies the team — works for any business type.',
+        prompt: 'When someone messages me for the first time, ask for their name, then ask what they are enquiring about, save both answers as notes on the contact, and notify the team that a new enquiry came in.',
+      },
+      {
+        name: 'Qualify and tag interest',
+        description: 'Asks what they are interested in and saves it, so every enquiry has a captured reason before a human joins.',
+        prompt: 'When someone messages me, ask what they are interested in or what problem they need help with, save the answer as a note on the contact, then reply that a team member will follow up shortly.',
+      },
+    ],
+  },
+];
+
 const NODE_LABELS: Record<string, { label: string; icon: typeof Play }> = {
   start: { label: 'Start', icon: Play },
   sendMessage: { label: 'Send Message', icon: MessageSquare },
@@ -79,6 +168,10 @@ export default function AutomationsPage() {
   const [generatedFlow, setGeneratedFlow] = useState<GeneratedFlow | null>(null);
   const [savingFlow, setSavingFlow] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Agent template gallery
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateCategory, setTemplateCategory] = useState<AgentCategory | null>(null);
 
   const totalExecutions = flows.reduce((s, f) => s + (f.trigger_config?.runs || 0), 0);
   const activeFlows = flows.filter((f) => f.is_active).length;
@@ -111,9 +204,9 @@ export default function AutomationsPage() {
     setShowAiChat(true);
   };
 
-  const sendChatMessage = async () => {
-    if (!chatInput.trim() || chatLoading) return;
-    const userMsg = chatInput.trim();
+  const sendChatMessage = async (override?: string) => {
+    const userMsg = (override ?? chatInput).trim();
+    if (!userMsg || chatLoading) return;
     setChatInput('');
     const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: userMsg }];
     setChatHistory(newHistory);
@@ -144,6 +237,18 @@ export default function AutomationsPage() {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
     setChatLoading(false);
+  };
+
+  const useTemplate = (tpl: AgentTemplate) => {
+    setShowTemplates(false);
+    setTemplateCategory(null);
+    setChatHistory([{
+      role: 'assistant',
+      content: "Hi! I'll help you build an automation flow. Just describe what you want — for example: \"When someone messages me, send them a welcome message\" or \"When a customer asks about pricing, reply with our prices and wait 2 minutes then ask if they need more help\".",
+    }]);
+    setGeneratedFlow(null);
+    setShowAiChat(true);
+    sendChatMessage(tpl.prompt);
   };
 
   const saveGeneratedFlow = async () => {
@@ -225,6 +330,9 @@ export default function AutomationsPage() {
         subtitle="Create and manage conversation flows to automate WhatsApp responses"
         actions={
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => { setTemplateCategory(null); setShowTemplates(true); }}>
+              <Bot className="w-4 h-4 mr-2 text-primary" />Agent templates
+            </Button>
             <Button size="sm" variant="outline" onClick={openAiChat}>
               <Sparkles className="w-4 h-4 mr-2 text-purple-500" />Create with AI
             </Button>
@@ -320,6 +428,45 @@ export default function AutomationsPage() {
       </div>
 
       {/* Manual new flow dialog */}
+      {/* Agent template gallery */}
+      <Dialog open={showTemplates} onOpenChange={(open) => { setShowTemplates(open); if (!open) setTemplateCategory(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{templateCategory ? templateCategory.label : 'Agent category'}</DialogTitle>
+          </DialogHeader>
+          {!templateCategory ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {AGENT_CATEGORIES.map((cat) => (
+                <button
+                  key={cat.key}
+                  onClick={() => setTemplateCategory(cat)}
+                  className="text-left border rounded-xl p-4 hover:border-primary hover:shadow-sm transition-all"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center mb-2">
+                    <cat.icon className="w-4.5 h-4.5" />
+                  </div>
+                  <p className="text-sm font-semibold">{cat.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{cat.description}</p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setTemplateCategory(null)}>← Back to categories</Button>
+              {templateCategory.templates.map((tpl) => (
+                <div key={tpl.name} className="border rounded-xl p-4 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{tpl.name}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{tpl.description}</p>
+                  </div>
+                  <Button size="sm" className="flex-shrink-0" onClick={() => useTemplate(tpl)}>Use template</Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent>
           <DialogHeader><DialogTitle>Create New Flow</DialogTitle></DialogHeader>
@@ -450,7 +597,7 @@ export default function AutomationsPage() {
                 disabled={chatLoading}
                 className="flex-1"
               />
-              <Button size="icon" onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()}>
+              <Button size="icon" onClick={() => sendChatMessage()} disabled={chatLoading || !chatInput.trim()}>
                 {chatLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </div>
