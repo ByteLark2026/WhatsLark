@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Send, MoreVertical, UserCheck, CheckCheck, Check, Clock, AlertCircle,
-  StickyNote, ArrowLeft, Phone, PhoneCall, WifiOff, Zap, Package, X, Search,
+  StickyNote, ArrowLeft, Phone, PhoneCall, WifiOff, Zap, Package, X, Search, Paperclip,
 } from 'lucide-react';
 import { useTwilioDevice } from '@/hooks/use-twilio-device';
 import { Button } from '@/components/ui/button';
@@ -275,7 +275,7 @@ export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
                 ) : msg.media_url && msg.type === 'document' ? (
                   <a href={`/api/media?id=${encodeURIComponent(msg.media_url)}&channel_id=${encodeURIComponent(conversation.channel_id)}`}
                     target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 underline text-sm">
-                    📎 {msg.content || 'File'}
+                    <Paperclip className="w-3.5 h-3.5" /> {msg.content || 'File'}
                   </a>
                 ) : (
                   <p className="whitespace-pre-wrap">{msg.content}</p>

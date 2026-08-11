@@ -35,8 +35,9 @@ export async function GET() {
   var bubble = el('button', {
     position: 'fixed', bottom: '20px', right: '20px', width: '56px', height: '56px',
     borderRadius: '50%', background: primaryColor, border: 'none', cursor: 'pointer',
-    boxShadow: '0 2px 10px rgba(0,0,0,.25)', zIndex: 999999, fontSize: '26px', color: '#fff',
-  }, { textContent: '💬' });
+    boxShadow: '0 2px 10px rgba(0,0,0,.25)', zIndex: 999999, color: '#fff',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  }, { innerHTML: '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>' });
 
   var panel = el('div', {
     position: 'fixed', bottom: '86px', right: '20px', width: '320px', height: '440px',

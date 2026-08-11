@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Flame, TrendingUp, BarChart2, RefreshCw, Plus, Trash2 } from 'lucide-react';
+import { Flame, Sun, Snowflake, Skull, TrendingUp, BarChart2, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,11 +15,11 @@ import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { cn, getInitials } from '@/lib/utils';
 
-const GRADE_STYLES: Record<string, { label: string; className: string }> = {
-  hot:  { label: '🔥 Hot',  className: 'bg-red-100 text-red-700 border-red-200' },
-  warm: { label: '☀️ Warm', className: 'bg-orange-100 text-orange-700 border-orange-200' },
-  cold: { label: '❄️ Cold', className: 'bg-blue-100 text-blue-700 border-blue-200' },
-  dead: { label: '💀 Dead', className: 'bg-gray-100 text-gray-500 border-gray-200' },
+const GRADE_STYLES: Record<string, { label: string; icon: typeof Flame; className: string }> = {
+  hot:  { label: 'Hot',  icon: Flame,     className: 'bg-red-100 text-red-700 border-red-200' },
+  warm: { label: 'Warm', icon: Sun,       className: 'bg-orange-100 text-orange-700 border-orange-200' },
+  cold: { label: 'Cold', icon: Snowflake, className: 'bg-blue-100 text-blue-700 border-blue-200' },
+  dead: { label: 'Dead', icon: Skull,     className: 'bg-gray-100 text-gray-500 border-gray-200' },
 };
 
 interface ScoredLead {
@@ -127,7 +127,7 @@ export default function LeadScoringPage() {
               )}
             >
               <p className="text-lg font-bold">{gradeCounts[grade] || 0}</p>
-              <p className="text-sm font-medium">{style.label}</p>
+              <p className="text-sm font-medium flex items-center gap-1"><style.icon className="w-3.5 h-3.5" />{style.label}</p>
             </button>
           ))}
         </div>
@@ -138,7 +138,8 @@ export default function LeadScoringPage() {
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm">
+                  <CardTitle className="text-sm flex items-center gap-1.5">
+                    {gradeFilter && GRADE_STYLES[gradeFilter] && (() => { const Icon = GRADE_STYLES[gradeFilter].icon; return <Icon className="w-4 h-4" />; })()}
                     {gradeFilter ? `${GRADE_STYLES[gradeFilter]?.label} Leads` : 'All Leads'}
                   </CardTitle>
                   {gradeFilter && (
@@ -169,7 +170,8 @@ export default function LeadScoringPage() {
                           <p className="text-xs text-muted-foreground">{lead.contacts?.name || ''} · {lead.stage.replace('_', ' ')}</p>
                         </div>
                         <div className="text-right shrink-0">
-                          <Badge className={cn('text-[10px] border', GRADE_STYLES[lead.score_grade]?.className)}>
+                          <Badge className={cn('text-[10px] border gap-1', GRADE_STYLES[lead.score_grade]?.className)}>
+                            {GRADE_STYLES[lead.score_grade] && (() => { const Icon = GRADE_STYLES[lead.score_grade].icon; return <Icon className="w-3 h-3" />; })()}
                             {GRADE_STYLES[lead.score_grade]?.label}
                           </Badge>
                           {lead.deal_value ? (

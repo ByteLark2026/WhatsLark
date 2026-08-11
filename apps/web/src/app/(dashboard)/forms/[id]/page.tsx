@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   Plus, Trash2, GripVertical, Eye, Save, ArrowLeft, Copy, ExternalLink,
   Type, Mail, Phone, AlignLeft, ChevronDown, CheckSquare, Hash, Calendar,
+  ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -243,8 +244,8 @@ export default function FormBuilderPage() {
                                   {field.required && <Badge variant="destructive" className="text-[10px] px-1 py-0">Required</Badge>}
                                 </div>
                                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveField(idx, -1)} disabled={idx === 0}>↑</Button>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveField(idx, 1)} disabled={idx === form.fields.length - 1}>↓</Button>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveField(idx, -1)} disabled={idx === 0}><ArrowUp className="w-3 h-3" /></Button>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveField(idx, 1)} disabled={idx === form.fields.length - 1}><ArrowDown className="w-3 h-3" /></Button>
                                   <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => removeField(field.id)}>
                                     <Trash2 className="w-3 h-3" />
                                   </Button>

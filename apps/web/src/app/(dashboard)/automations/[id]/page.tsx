@@ -14,7 +14,7 @@ import {
   GitBranch, Clock, Variable, UserCheck, Webhook, BookOpen,
   XCircle, UserPlus, RefreshCw, ArrowLeft, Save, Plus, Loader2,
   ChevronDown, Zap, Blocks, Settings2, Play, CheckCircle2,
-  AlertCircle, SkipForward, Hash,
+  AlertCircle, SkipForward, Hash, Check, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -100,8 +100,8 @@ function ConditionNode({ data, selected }: { data: FlowNodeData; selected: boole
           <p className="text-gray-500 truncate">{data.config.conditionValue}</p>
         )}
         <div className="flex justify-between mt-2 text-[10px]">
-          <span className="text-green-600 font-medium">✓ Yes →</span>
-          <span className="text-red-500 font-medium">← No ✗</span>
+          <span className="text-green-600 font-medium inline-flex items-center gap-0.5"><Check className="w-2.5 h-2.5" /> Yes →</span>
+          <span className="text-red-500 font-medium inline-flex items-center gap-0.5">← No <X className="w-2.5 h-2.5" /></span>
         </div>
       </div>
       <Handle type="source" id="yes" position={Position.Left} className="!bg-green-500 !border-white !w-3 !h-3" style={{ top: '65%' }} />
@@ -615,8 +615,8 @@ export default function FlowEditorPage() {
                   </>
                 )}
                 <div className="rounded-lg border p-2 space-y-1 mt-1">
-                  <p className="text-[10px] text-green-600 font-medium">✓ Left handle → Yes path</p>
-                  <p className="text-[10px] text-red-500 font-medium">✗ Right handle → No path</p>
+                  <p className="text-[10px] text-green-600 font-medium flex items-center gap-1"><Check className="w-2.5 h-2.5" /> Left handle → Yes path</p>
+                  <p className="text-[10px] text-red-500 font-medium flex items-center gap-1"><X className="w-2.5 h-2.5" /> Right handle → No path</p>
                   <p className="text-[10px] text-muted-foreground">Drag from the coloured dots on each side</p>
                 </div>
               </div>

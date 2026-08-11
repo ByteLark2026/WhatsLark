@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ShoppingBag, Plus, Trash2, RefreshCw, Loader2, CheckCircle2, AlertCircle, ExternalLink, Package } from 'lucide-react';
+import { ShoppingBag, Plus, Trash2, RefreshCw, Loader2, CheckCircle2, AlertCircle, ExternalLink, Package, Circle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,7 +64,7 @@ export default function IntegrationsPage() {
     setTesting(true);
     try {
       await api.post('/ecommerce/connections/test', form);
-      toast({ title: 'Connection successful ✓' });
+      toast({ title: 'Connection successful' });
     } catch (err: any) {
       toast({ title: 'Connection failed', description: err.message, variant: 'destructive' });
     }
@@ -166,8 +166,9 @@ export default function IntegrationsPage() {
                   <Badge variant="outline" className={cn('text-xs', PLATFORM_COLORS[conn.platform])}>
                     {PLATFORM_LABELS[conn.platform]}
                   </Badge>
-                  <Badge variant={conn.is_active ? 'outline' : 'secondary'} className="text-xs">
-                    {conn.is_active ? '● Active' : '○ Inactive'}
+                  <Badge variant={conn.is_active ? 'outline' : 'secondary'} className="text-xs gap-1">
+                    <Circle className={cn('w-2 h-2', conn.is_active ? 'fill-green-500 text-green-500' : 'fill-muted-foreground text-muted-foreground')} />
+                    {conn.is_active ? 'Active' : 'Inactive'}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">{conn.store_url}</p>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, Filter, Plus, Loader2 } from 'lucide-react';
+import { Search, Filter, Plus, Loader2, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -336,8 +336,8 @@ export default function InboxPage() {
                 </div>
               )}
               {newForm.contact_id && !contactSearch.includes('Search') && (
-                <p className="text-xs text-green-700">
-                  ✓ Contact selected
+                <p className="text-xs text-green-700 flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Contact selected
                 </p>
               )}
             </div>

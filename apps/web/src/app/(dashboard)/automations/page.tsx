@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Zap, Activity, Pencil, Trash2, Sparkles, Send, Bot, User, Loader2, CheckCircle } from 'lucide-react';
+import { Plus, Zap, Activity, Pencil, Trash2, Sparkles, Send, Bot, User, Loader2, CheckCircle, Play, MessageSquare, FileText, Timer, GitBranch, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -52,13 +52,13 @@ const TRIGGER_LABELS: Record<string, string> = {
   new_conversation: 'New conversation',
 };
 
-const NODE_LABELS: Record<string, string> = {
-  start: '▶ Start',
-  sendMessage: '💬 Send Message',
-  template: '📄 Template',
-  delay: '⏱ Delay',
-  condition: '🔀 Condition',
-  end: '⏹ End',
+const NODE_LABELS: Record<string, { label: string; icon: typeof Play }> = {
+  start: { label: 'Start', icon: Play },
+  sendMessage: { label: 'Send Message', icon: MessageSquare },
+  template: { label: 'Template', icon: FileText },
+  delay: { label: 'Delay', icon: Timer },
+  condition: { label: 'Condition', icon: GitBranch },
+  end: { label: 'End', icon: Square },
 };
 
 export default function AutomationsPage() {
@@ -291,8 +291,8 @@ export default function AutomationsPage() {
                     </div>
                     {description && <p className="text-xs text-muted-foreground line-clamp-2">{description}</p>}
                     <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline" className="text-xs font-mono bg-blue-50 text-blue-700 border-blue-200">
-                        ⚡ {TRIGGER_LABELS[flow.trigger] || flow.trigger}
+                      <Badge variant="outline" className="text-xs font-mono bg-blue-50 text-blue-700 border-blue-200 gap-1">
+                        <Zap className="w-3 h-3" /> {TRIGGER_LABELS[flow.trigger] || flow.trigger}
                       </Badge>
                       <Badge variant="secondary" className="text-xs">{flow.is_active ? 'Active' : 'Inactive'}</Badge>
                     </div>
@@ -417,8 +417,8 @@ export default function AutomationsPage() {
                     <span className="text-sm font-semibold text-green-800 truncate">{generatedFlow.name}</span>
                   </div>
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline" className="text-xs bg-white border-green-300 text-green-700">
-                      ⚡ {TRIGGER_LABELS[generatedFlow.trigger] || generatedFlow.trigger}
+                    <Badge variant="outline" className="text-xs bg-white border-green-300 text-green-700 gap-1">
+                      <Zap className="w-3 h-3" /> {TRIGGER_LABELS[generatedFlow.trigger] || generatedFlow.trigger}
                     </Badge>
                     <span className="text-xs text-green-700">{generatedFlow.nodes.length} nodes</span>
                   </div>
@@ -426,8 +426,8 @@ export default function AutomationsPage() {
                     {generatedFlow.nodes
                       .filter((n: any) => n.type !== 'start')
                       .map((n: any, i: number) => (
-                        <span key={i} className="text-xs bg-white border border-green-200 rounded px-1.5 py-0.5 text-green-800">
-                          {NODE_LABELS[n.type] || n.type}
+                        <span key={i} className="text-xs bg-white border border-green-200 rounded px-1.5 py-0.5 text-green-800 inline-flex items-center gap-1">
+                          {NODE_LABELS[n.type] ? (() => { const Icon = NODE_LABELS[n.type].icon; return <><Icon className="w-3 h-3" />{NODE_LABELS[n.type].label}</>; })() : n.type}
                         </span>
                       ))}
                   </div>

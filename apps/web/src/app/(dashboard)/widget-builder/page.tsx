@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, Loader2, Copy, Check, MessageCircle, X, Search, ChevronRight } from 'lucide-react';
+import { Save, Loader2, Copy, Check, MessageCircle, X, Search, ChevronRight, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -112,7 +112,7 @@ function WidgetPreview({ config }: { config: WidgetConfig }) {
               <div>
                 <p className="text-xs text-gray-600">Our usual reply time</p>
                 <p className="text-xs font-medium flex items-center gap-1">
-                  <span className="text-gray-400">🕐</span> {config.response_time}
+                  <Clock className="w-3 h-3 text-gray-400" /> {config.response_time}
                 </p>
               </div>
             </div>

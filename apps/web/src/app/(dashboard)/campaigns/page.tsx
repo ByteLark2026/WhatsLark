@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   Plus, Send, Users, CheckCheck, Eye, XCircle, MoreHorizontal,
-  Loader2, Search, Upload
+  Loader2, Search, Upload, ClipboardList, FileText, Smartphone, Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -446,7 +446,7 @@ export default function CampaignsPage() {
               {/* Campaign Info */}
               <div className="border rounded-lg p-4 space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <span className="text-base">📋</span> Campaign Info
+                  <ClipboardList className="w-4 h-4" /> Campaign Info
                 </h4>
                 <div className="space-y-2">
                   <Label>Campaign Name *</Label>
@@ -470,7 +470,7 @@ export default function CampaignsPage() {
               {/* Template */}
               <div className="border rounded-lg p-4 space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <span className="text-base">👁</span> Template
+                  <Eye className="w-4 h-4" /> Template
                 </h4>
                 {selectedTemplate ? (
                   <div className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-lg">
@@ -482,7 +482,7 @@ export default function CampaignsPage() {
                   </div>
                 ) : (
                   <Button variant="outline" size="sm" onClick={() => setShowTemplateDialog(true)}>
-                    📄 Select Template
+                    <FileText className="w-4 h-4 mr-1.5" /> Select Template
                   </Button>
                 )}
               </div>
@@ -490,7 +490,7 @@ export default function CampaignsPage() {
               {/* Channel */}
               <div className="border rounded-lg p-4 space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <span className="text-base">📱</span> WhatsApp channel
+                  <Smartphone className="w-4 h-4" /> WhatsApp channel
                 </h4>
                 {channels.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
@@ -515,7 +515,7 @@ export default function CampaignsPage() {
               {/* Scheduling */}
               <div className="border rounded-lg p-4 space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <span className="text-base">🕐</span> Scheduling
+                  <Clock className="w-4 h-4" /> Scheduling
                 </h4>
                 <div className="space-y-2">
                   <Label>Schedule Campaign (Optional)</Label>

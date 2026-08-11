@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { MessageSquare, CheckCircle, ArrowRight, Zap, Users, BarChart3, Bot, Shield, Globe } from 'lucide-react';
+import { MessageSquare, CheckCircle, ArrowRight, Zap, Users, BarChart3, Bot, Shield, Globe, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -106,8 +106,8 @@ export default async function HomePage() {
       {/* Hero */}
       <section className="pt-16 sm:pt-24 pb-20 px-4 sm:px-6 text-center">
         <div className="max-w-4xl mx-auto">
-          <Badge variant="secondary" className="mb-6 text-sm px-4 py-1.5">
-            🚀 Now in beta — join 2,000+ businesses
+          <Badge variant="secondary" className="mb-6 text-sm px-4 py-1.5 gap-1.5">
+            <Rocket className="w-3.5 h-3.5" /> Now in beta — join 2,000+ businesses
           </Badge>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
             WhatsApp CRM for{' '}
