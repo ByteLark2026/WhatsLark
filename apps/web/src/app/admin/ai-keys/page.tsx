@@ -22,7 +22,7 @@ interface AiProviderKey {
   created_at: string;
 }
 
-const PROVIDERS = ['openai'];
+const PROVIDERS = ['openai', 'gemini', 'grok', 'kimi', 'claude', 'deepseek'];
 
 export default function AdminAiKeysPage() {
   const { toast } = useToast();
@@ -89,7 +89,10 @@ export default function AdminAiKeysPage() {
       </div>
 
       <p className="text-sm text-muted-foreground mb-4">
-        The most recently added <strong>active</strong> key is used everywhere. If none are active, the app falls back to the <code className="text-xs bg-muted px-1 py-0.5 rounded">OPENAI_API_KEY</code> environment variable.
+        The most recently added <strong>active</strong> OpenAI key is used everywhere the app calls AI (auto-reply, flow generation, voice agent, transcription). If none are active, it falls back to the <code className="text-xs bg-muted px-1 py-0.5 rounded">OPENAI_API_KEY</code> environment variable.
+      </p>
+      <p className="text-xs text-amber-600 mb-4">
+        Gemini / Grok / Kimi / Claude / DeepSeek keys can be stored here but aren't wired to any feature yet — every AI call in the app is currently hardcoded to OpenAI. Ask to have a specific feature switched to one of these before relying on it.
       </p>
 
       {loading ? (
