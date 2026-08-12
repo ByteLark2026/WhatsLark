@@ -250,7 +250,7 @@ async function handleIncomingMessage(
       // Fire automations after insert. Must await — Vercel serverless terminates the
       // function after the response is sent, so fire-and-forget work here is only ever
       // reliable by accident (e.g. it happens to finish before teardown on a warm instance).
-      await executeAutomations({
+      const resumed = await resumePausedFlow({
         companyId,
         channelId,
         conversationId: conversation.id,
@@ -258,11 +258,24 @@ async function handleIncomingMessage(
         messageText: type === 'text' ? content : '',
         accessToken: access_token,
         phoneNumberId: phone_number_id,
-        isNewConversation,
-      }).catch((err) => console.error('[webhook] automation error:', err));
+      }).catch((err) => { console.error('[webhook] flow resume error:', err); return false; });
 
-      // AI auto-reply — only fires if AI Bot enabled in settings. Same await requirement.
-      await executeAiAutoReply({
+      if (!resumed) {
+        await executeAutomations({
+          companyId,
+          channelId,
+          conversationId: conversation.id,
+          contactPhone: msg.from,
+          messageText: type === 'text' ? content : '',
+          accessToken: access_token,
+          phoneNumberId: phone_number_id,
+          isNewConversation,
+        }).catch((err) => console.error('[webhook] automation error:', err));
+      }
+
+      // AI auto-reply — only fires if AI Bot enabled in settings, and skipped while a flow
+      // is actively mid-conversation with this contact to avoid a double response.
+      if (!resumed) await executeAiAutoReply({
         companyId,
         channelId,
         conversationId: conversation.id,
@@ -475,28 +488,95 @@ async function executeAutomations(ctx: {
   }
 }
 
-async function executeFlow(rule: any, ctx: FlowCtx) {
+async function saveFlowState(conversationId: string, companyId: string, ruleId: string, resumeNodeId: string, awaitingVariable: string | undefined, vars: Record<string, string>) {
+  await adminSupabase.from('automation_flow_state').upsert({
+    conversation_id: conversationId,
+    company_id: companyId,
+    rule_id: ruleId,
+    resume_node_id: resumeNodeId,
+    awaiting_variable: awaitingVariable || null,
+    vars,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'conversation_id' });
+}
+
+async function clearFlowState(conversationId: string) {
+  await adminSupabase.from('automation_flow_state').delete().eq('conversation_id', conversationId);
+}
+
+/** If a flow is paused waiting on this conversation's reply (last node it ran was
+ *  askQuestion), captures the reply into the awaited variable and resumes from the
+ *  next node — instead of the flow firing every remaining step in one burst on the
+ *  very next inbound message, which is what happened before this existed. */
+async function resumePausedFlow(ctx: {
+  companyId: string; channelId: string; conversationId: string;
+  contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
+}): Promise<boolean> {
+  const { data: state } = await adminSupabase
+    .from('automation_flow_state')
+    .select('*')
+    .eq('conversation_id', ctx.conversationId)
+    .maybeSingle();
+  if (!state) return false;
+
+  const { data: rule } = await adminSupabase
+    .from('automation_rules')
+    .select('*')
+    .eq('id', state.rule_id)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (!rule) {
+    await clearFlowState(ctx.conversationId);
+    return false;
+  }
+
+  const vars: Record<string, string> = { ...(state.vars || {}) };
+  if (state.awaiting_variable) vars[state.awaiting_variable] = ctx.messageText;
+
+  await executeFlow(rule, { ...ctx, vars }, state.resume_node_id);
+  return true;
+}
+
+async function executeFlow(rule: any, ctx: FlowCtx, startNodeId?: string) {
   const nodes: any[] = rule.trigger_config?.nodes || [];
   const edges: any[] = rule.trigger_config?.edges || [];
   if (!nodes.length) return;
 
   const nodeMap = new Map(nodes.map((n: any) => [n.id, n]));
-  const startNode = nodes.find((n: any) => n.type === 'start');
-  let currentId = startNode?.id || '';
-  const visited = new Set<string>();
+  let currentId = startNodeId;
+  if (!currentId) {
+    const startNode = nodes.find((n: any) => n.type === 'start');
+    currentId = startNode?.id || '';
+  }
   if (!currentId) return;
+  const visited = new Set<string>();
 
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId);
     const node = nodeMap.get(currentId);
-    if (!node || node.type === 'end') break;
+    if (!node || node.type === 'end') {
+      await clearFlowState(ctx.conversationId);
+      break;
+    }
 
     if (node.type === 'condition') {
       const branch = await evaluateCondition(node, ctx);
       const next = edges.find((e: any) => e.source === currentId && e.sourceHandle === (branch ? 'yes' : 'no'))
         || edges.find((e: any) => e.source === currentId);
       currentId = next?.target || '';
+      if (!currentId) await clearFlowState(ctx.conversationId);
       continue;
+    }
+
+    if (node.type === 'askQuestion') {
+      await executeFlowNode(node, ctx); // sends the question
+      const next = edges.find((e: any) => e.source === currentId);
+      if (next?.target) {
+        await saveFlowState(ctx.conversationId, ctx.companyId, rule.id, next.target, node.data?.config?.variable, ctx.vars);
+      } else {
+        await clearFlowState(ctx.conversationId);
+      }
+      return; // pause here — wait for the customer's reply on the next inbound message
     }
 
     if (node.type !== 'start') {
@@ -505,6 +585,7 @@ async function executeFlow(rule: any, ctx: FlowCtx) {
 
     const next = edges.find((e: any) => e.source === currentId);
     currentId = next?.target || '';
+    if (!currentId) await clearFlowState(ctx.conversationId);
   }
 }
 

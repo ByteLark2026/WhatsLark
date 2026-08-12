@@ -184,18 +184,29 @@ export class WhatsAppWebhookService {
     this.logger.log(`New message from ${phone} in conversation ${conversation.id}`);
 
     if (type === 'text') {
-      await this.executeAutomations({
+      const resumed = await this.resumePausedFlow({
         companyId, channelId: channel.id, conversationId: conversation.id,
         contactPhone: phone, messageText: content,
         accessToken: channel.access_token, phoneNumberId: channel.phone_number_id,
-        isNewConversation,
-      }).catch((err) => this.logger.error('Automation error', err));
+      }).catch((err) => { this.logger.error('Flow resume error', err); return false; });
 
-      await this.executeAiAutoReply({
-        companyId, channelId: channel.id, conversationId: conversation.id,
-        contactPhone: phone, incomingMessage: content,
-        accessToken: channel.access_token, phoneNumberId: channel.phone_number_id,
-      }).catch((err) => this.logger.error('AI auto-reply error', err));
+      if (!resumed) {
+        await this.executeAutomations({
+          companyId, channelId: channel.id, conversationId: conversation.id,
+          contactPhone: phone, messageText: content,
+          accessToken: channel.access_token, phoneNumberId: channel.phone_number_id,
+          isNewConversation,
+        }).catch((err) => this.logger.error('Automation error', err));
+      }
+
+      // Skipped while a flow is actively mid-conversation with this contact, to avoid a double response.
+      if (!resumed) {
+        await this.executeAiAutoReply({
+          companyId, channelId: channel.id, conversationId: conversation.id,
+          contactPhone: phone, incomingMessage: content,
+          accessToken: channel.access_token, phoneNumberId: channel.phone_number_id,
+        }).catch((err) => this.logger.error('AI auto-reply error', err));
+      }
     }
   }
 
@@ -293,28 +304,94 @@ export class WhatsAppWebhookService {
     }
   }
 
-  private async executeFlow(rule: any, ctx: FlowCtx) {
+  private async saveFlowState(conversationId: string, companyId: string, ruleId: string, resumeNodeId: string, awaitingVariable: string | undefined, vars: Record<string, string>) {
+    await this.supabase.getAdminClient().from('automation_flow_state').upsert({
+      conversation_id: conversationId,
+      company_id: companyId,
+      rule_id: ruleId,
+      resume_node_id: resumeNodeId,
+      awaiting_variable: awaitingVariable || null,
+      vars,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'conversation_id' });
+  }
+
+  private async clearFlowState(conversationId: string) {
+    await this.supabase.getAdminClient().from('automation_flow_state').delete().eq('conversation_id', conversationId);
+  }
+
+  /** If a flow is paused waiting on this conversation's reply (last node it ran was
+   *  askQuestion), captures the reply into the awaited variable and resumes from the
+   *  next node instead of the flow firing every remaining step in one burst. */
+  private async resumePausedFlow(ctx: {
+    companyId: string; channelId: string; conversationId: string;
+    contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
+  }): Promise<boolean> {
+    const { data: state } = await this.supabase.getAdminClient()
+      .from('automation_flow_state')
+      .select('*')
+      .eq('conversation_id', ctx.conversationId)
+      .maybeSingle();
+    if (!state) return false;
+
+    const { data: rule } = await this.supabase.getAdminClient()
+      .from('automation_rules')
+      .select('*')
+      .eq('id', state.rule_id)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (!rule) {
+      await this.clearFlowState(ctx.conversationId);
+      return false;
+    }
+
+    const vars: Record<string, string> = { ...(state.vars || {}) };
+    if (state.awaiting_variable) vars[state.awaiting_variable] = ctx.messageText;
+
+    await this.executeFlow(rule, { ...ctx, vars }, state.resume_node_id);
+    return true;
+  }
+
+  private async executeFlow(rule: any, ctx: FlowCtx, startNodeId?: string) {
     const nodes: any[] = rule.trigger_config?.nodes || [];
     const edges: any[] = rule.trigger_config?.edges || [];
     if (!nodes.length) return;
 
     const nodeMap = new Map(nodes.map((n: any) => [n.id, n]));
-    const startNode = nodes.find((n: any) => n.type === 'start');
-    let currentId = startNode?.id || '';
+    let currentId = startNodeId;
+    if (!currentId) {
+      const startNode = nodes.find((n: any) => n.type === 'start');
+      currentId = startNode?.id || '';
+    }
     if (!currentId) return;
     const visited = new Set<string>();
 
     while (currentId && !visited.has(currentId)) {
       visited.add(currentId);
       const node = nodeMap.get(currentId);
-      if (!node || node.type === 'end') break;
+      if (!node || node.type === 'end') {
+        await this.clearFlowState(ctx.conversationId);
+        break;
+      }
 
       if (node.type === 'condition') {
         const branch = this.evaluateCondition(node, ctx);
         const next = edges.find((e: any) => e.source === currentId && e.sourceHandle === (branch ? 'yes' : 'no'))
           || edges.find((e: any) => e.source === currentId);
         currentId = next?.target || '';
+        if (!currentId) await this.clearFlowState(ctx.conversationId);
         continue;
+      }
+
+      if (node.type === 'askQuestion') {
+        await this.executeFlowNode(node, ctx); // sends the question
+        const next = edges.find((e: any) => e.source === currentId);
+        if (next?.target) {
+          await this.saveFlowState(ctx.conversationId, ctx.companyId, rule.id, next.target, node.data?.config?.variable, ctx.vars);
+        } else {
+          await this.clearFlowState(ctx.conversationId);
+        }
+        return; // pause here — wait for the customer's reply on the next inbound message
       }
 
       if (node.type !== 'start') {
@@ -323,6 +400,7 @@ export class WhatsAppWebhookService {
 
       const next = edges.find((e: any) => e.source === currentId);
       currentId = next?.target || '';
+      if (!currentId) await this.clearFlowState(ctx.conversationId);
     }
   }
 
