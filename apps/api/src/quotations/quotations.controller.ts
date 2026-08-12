@@ -66,6 +66,13 @@ export class QuotationsController {
     return this.service.send(companyId, id);
   }
 
+  @Post(':id/send-whatsapp')
+  @UseGuards(JwtAuthGuard)
+  async sendWhatsApp(@Request() req: any, @Param('id') id: string) {
+    const companyId = await this.getCompanyId(req.user.id);
+    return this.service.sendWhatsApp(companyId, req.user.id, id);
+  }
+
   @Patch(':id/accept')
   @UseGuards(JwtAuthGuard)
   async accept(@Request() req: any, @Param('id') id: string) {

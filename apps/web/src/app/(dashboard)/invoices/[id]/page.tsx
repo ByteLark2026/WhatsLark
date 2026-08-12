@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, Send, CheckCircle, Copy, Printer, Save } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Send, CheckCircle, Copy, Printer, Save, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +38,7 @@ export default function InvoiceBuilderPage() {
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [sendingWa, setSendingWa] = useState(false);
 
   useEffect(() => {
     api.get<any>(`/invoices/${id}`).then((data) => {
@@ -96,6 +97,23 @@ export default function InvoiceBuilderPage() {
     toast({ title: 'Link copied' });
   };
 
+  const sendWhatsApp = async () => {
+    if (!inv?.contacts?.phone) {
+      toast({ title: 'No contact', description: 'This invoice has no linked contact with a phone number.', variant: 'destructive' });
+      return;
+    }
+    setSendingWa(true);
+    try {
+      await save();
+      const updated = await api.post<any>(`/invoices/${id}/send-whatsapp`);
+      setInv(updated);
+      toast({ title: 'Sent to WhatsApp inbox' });
+    } catch (e: any) {
+      toast({ title: 'Send failed', description: e.message, variant: 'destructive' });
+    }
+    setSendingWa(false);
+  };
+
   const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   if (!inv) return <div className="p-8 text-center text-muted-foreground">Loading…</div>;
@@ -108,6 +126,9 @@ export default function InvoiceBuilderPage() {
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={() => router.push('/invoices')}><ArrowLeft className="w-3.5 h-3.5 mr-1.5" />Back</Button>
             <Button variant="outline" size="sm" onClick={copyLink}><Copy className="w-3.5 h-3.5 mr-1.5" />Copy link</Button>
+            <Button variant="outline" size="sm" className="text-green-700" onClick={sendWhatsApp} disabled={sendingWa}>
+              <MessageCircle className="w-3.5 h-3.5 mr-1.5" />{sendingWa ? 'Sending…' : 'Send to WhatsApp'}
+            </Button>
             {inv.status !== 'paid' && inv.status !== 'cancelled' && (
               <>
                 {inv.status === 'draft' && <Button variant="outline" size="sm" onClick={send}><Send className="w-3.5 h-3.5 mr-1.5" />Mark sent</Button>}

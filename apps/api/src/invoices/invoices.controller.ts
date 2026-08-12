@@ -66,6 +66,13 @@ export class InvoicesController {
     return this.service.send(companyId, id);
   }
 
+  @Post(':id/send-whatsapp')
+  @UseGuards(JwtAuthGuard)
+  async sendWhatsApp(@Request() req: any, @Param('id') id: string) {
+    const companyId = await this.getCompanyId(req.user.id);
+    return this.service.sendWhatsApp(companyId, req.user.id, id);
+  }
+
   @Patch(':id/paid')
   @UseGuards(JwtAuthGuard, CompanyGuard, RolesGuard)
   @Roles('owner', 'admin', 'manager')

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, Send, CheckCircle, XCircle, RefreshCw, Copy, Save } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Send, CheckCircle, XCircle, RefreshCw, Copy, Save, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,6 +36,7 @@ export default function QuoteBuilderPage() {
   const [notes, setNotes] = useState('');
   const [terms, setTerms] = useState('');
   const [saving, setSaving] = useState(false);
+  const [sendingWa, setSendingWa] = useState(false);
 
   useEffect(() => {
     api.get<any>(`/quotations/${id}`).then((data) => {
@@ -93,6 +94,23 @@ export default function QuoteBuilderPage() {
     toast({ title: 'Link copied' });
   };
 
+  const sendWhatsApp = async () => {
+    if (!quote?.contacts?.phone) {
+      toast({ title: 'No contact', description: 'This quotation has no linked contact with a phone number.', variant: 'destructive' });
+      return;
+    }
+    setSendingWa(true);
+    try {
+      await save();
+      const updated = await api.post<any>(`/quotations/${id}/send-whatsapp`);
+      setQuote(updated);
+      toast({ title: 'Sent to WhatsApp inbox' });
+    } catch (e: any) {
+      toast({ title: 'Send failed', description: e.message, variant: 'destructive' });
+    }
+    setSendingWa(false);
+  };
+
   const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const editable = !['accepted','rejected','converted'].includes(quote?.status);
 
@@ -106,6 +124,9 @@ export default function QuoteBuilderPage() {
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={() => router.push('/quotes')}><ArrowLeft className="w-3.5 h-3.5 mr-1.5" />Back</Button>
             <Button variant="outline" size="sm" onClick={copyLink}><Copy className="w-3.5 h-3.5 mr-1.5" />Copy link</Button>
+            <Button variant="outline" size="sm" className="text-green-700" onClick={sendWhatsApp} disabled={sendingWa}>
+              <MessageCircle className="w-3.5 h-3.5 mr-1.5" />{sendingWa ? 'Sending…' : 'Send to WhatsApp'}
+            </Button>
             {quote.status === 'draft' && <Button variant="outline" size="sm" onClick={() => action('send', 'Marked as sent')}><Send className="w-3.5 h-3.5 mr-1.5" />Mark sent</Button>}
             {quote.status === 'sent' && <>
               <Button variant="outline" size="sm" className="text-green-700" onClick={() => action('accept', 'Accepted')}><CheckCircle className="w-3.5 h-3.5 mr-1.5" />Accept</Button>

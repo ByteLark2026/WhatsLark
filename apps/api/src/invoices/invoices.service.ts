@@ -1,5 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase.service';
+import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import { shareDocumentViaWhatsApp } from '../common/document-whatsapp.util';
 
 export interface LineItem {
   id: string;
@@ -18,7 +20,10 @@ function calcTotals(lineItems: LineItem[], taxRate: number, discount: number) {
 
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly whatsapp: WhatsAppService,
+  ) {}
 
   private async nextNumber(companyId: string): Promise<string> {
     const { count } = await this.supabase.getAdminClient()
@@ -104,6 +109,22 @@ export class InvoicesService {
 
   async send(companyId: string, id: string) {
     return this.update(companyId, id, { status: 'sent', sent_at: new Date().toISOString() });
+  }
+
+  async sendWhatsApp(companyId: string, userId: string, id: string) {
+    const invoice = await this.get(companyId, id);
+    await shareDocumentViaWhatsApp(this.supabase, this.whatsapp, {
+      companyId,
+      senderId: userId,
+      contact: invoice.contacts,
+      docType: 'invoice',
+      docNumber: invoice.number,
+      total: invoice.total,
+      currency: invoice.currency,
+      publicToken: invoice.public_token,
+    });
+    if (invoice.status === 'draft') return this.send(companyId, id);
+    return invoice;
   }
 
   async markPaid(companyId: string, id: string) {
