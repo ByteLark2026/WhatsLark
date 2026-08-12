@@ -246,8 +246,10 @@ async function handleIncomingMessage(
     if (insertErr) console.error('[webhook] insert error:', insertErr.message);
     else {
       console.log('[webhook] message inserted OK');
-      // Fire automations after insert (non-blocking)
-      executeAutomations({
+      // Fire automations after insert. Must await — Vercel serverless terminates the
+      // function after the response is sent, so fire-and-forget work here is only ever
+      // reliable by accident (e.g. it happens to finish before teardown on a warm instance).
+      await executeAutomations({
         companyId,
         channelId,
         conversationId: conversation.id,
@@ -258,8 +260,8 @@ async function handleIncomingMessage(
         isNewConversation,
       }).catch((err) => console.error('[webhook] automation error:', err));
 
-      // AI auto-reply (non-blocking — only fires if AI Bot enabled in settings)
-      executeAiAutoReply({
+      // AI auto-reply — only fires if AI Bot enabled in settings. Same await requirement.
+      await executeAiAutoReply({
         companyId,
         channelId,
         conversationId: conversation.id,
