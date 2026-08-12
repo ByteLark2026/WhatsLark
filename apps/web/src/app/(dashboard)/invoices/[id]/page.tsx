@@ -166,7 +166,8 @@ export default function InvoiceBuilderPage() {
           </div>
         }
       />
-      <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      <div className="bg-white border rounded-xl p-4 sm:p-6 space-y-6">
         {/* Status + meta */}
         <div className="flex items-center gap-3">
           <Badge className={cn('text-xs', STATUS_STYLES[inv.status])}>{inv.status}</Badge>
@@ -275,6 +276,7 @@ export default function InvoiceBuilderPage() {
           <Label>Notes</Label>
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Payment instructions, thank you message…" className="h-24" />
         </div>
+      </div>
       </div>
     </div>
   );

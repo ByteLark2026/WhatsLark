@@ -164,7 +164,8 @@ export default function QuoteBuilderPage() {
           </div>
         }
       />
-      <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      <div className="bg-white border rounded-xl p-4 sm:p-6 space-y-6">
         <div className="flex items-center gap-3">
           <Badge className={cn('text-xs', STATUS_STYLES[quote.status])}>{quote.status}</Badge>
           {changingContact ? (
@@ -235,6 +236,7 @@ export default function QuoteBuilderPage() {
           <div className="space-y-1.5"><Label>Notes</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="h-24" disabled={!editable} /></div>
           <div className="space-y-1.5"><Label>Terms & conditions</Label><Textarea value={terms} onChange={(e) => setTerms(e.target.value)} className="h-24" disabled={!editable} /></div>
         </div>
+      </div>
       </div>
     </div>
   );
