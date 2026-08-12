@@ -225,6 +225,7 @@ export class WhatsAppWebhookService {
           companyId, channelId: channel.id, conversationId: conversation.id,
           contactPhone: phone, incomingMessage: content,
           accessToken: channel.access_token, phoneNumberId: channel.phone_number_id,
+          wasVoiceNote: type === 'audio' && !!transcript,
         }).catch((err) => this.logger.error('AI auto-reply error', err));
       }
     }
@@ -526,10 +527,43 @@ export class WhatsAppWebhookService {
     }
   }
 
+  // ── Text-to-speech reply (voice note in, voice note back) ────────────────────
+  private async synthesizeSpeech(text: string, apiKey: string): Promise<Buffer | null> {
+    const res = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: text, response_format: 'mp3' }),
+    });
+    if (!res.ok) {
+      this.logger.error(`TTS failed: ${await res.text().catch(() => res.statusText)}`);
+      return null;
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  private async uploadMetaMedia(accessToken: string, phoneNumberId: string, buffer: Buffer): Promise<string | null> {
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('file', new Blob([new Uint8Array(buffer)], { type: 'audio/mpeg' }), 'reply.mp3');
+    form.append('type', 'audio/mpeg');
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: form,
+    });
+    if (!res.ok) {
+      this.logger.error(`Media upload failed: ${await res.text().catch(() => res.statusText)}`);
+      return null;
+    }
+    const json = await res.json();
+    return json.id || null;
+  }
+
   // ── AI auto-reply ─────────────────────────────────────────────────────────────
   private async executeAiAutoReply(ctx: {
     companyId: string; channelId: string; conversationId: string;
     contactPhone: string; incomingMessage: string; accessToken: string; phoneNumberId: string;
+    wasVoiceNote?: boolean;
   }) {
     const { data: settings } = await this.supabase.getAdminClient()
       .from('ai_settings')
@@ -571,16 +605,43 @@ export class WhatsAppWebhookService {
     if (!replyText) return;
 
     const toPhone = ctx.contactPhone.replace(/\D/g, '');
-    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${ctx.phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'text', text: { body: replyText } }),
-    });
-    const json = await res.json();
+
+    // If the inbound message was a voice note, reply in kind — synthesize speech and
+    // send as an audio message. Falls back to text if TTS/upload fails for any reason.
+    let json: any = null;
+    let sentType: 'text' | 'audio' = 'text';
+    if (ctx.wasVoiceNote) {
+      try {
+        const speech = await this.synthesizeSpeech(replyText, openaiKey);
+        const mediaId = speech ? await this.uploadMetaMedia(ctx.accessToken, ctx.phoneNumberId, speech) : null;
+        if (mediaId) {
+          const audioRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${ctx.phoneNumberId}/messages`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'audio', audio: { id: mediaId } }),
+          });
+          json = await audioRes.json();
+          sentType = 'audio';
+        }
+      } catch (err) {
+        this.logger.error('Voice reply error, falling back to text', err as any);
+      }
+    }
+
+    if (!json) {
+      const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${ctx.phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'text', text: { body: replyText } }),
+      });
+      json = await res.json();
+      sentType = 'text';
+    }
+
     if (json.messages?.[0]?.id) {
       await this.supabase.getAdminClient().from('messages').insert({
         conversation_id: ctx.conversationId, company_id: ctx.companyId, channel_id: ctx.channelId,
-        direction: 'outbound', type: 'text', content: replyText,
+        direction: 'outbound', type: sentType, content: replyText,
         status: 'sent', wa_message_id: json.messages[0].id, is_note: false,
       });
     }

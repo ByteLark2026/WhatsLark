@@ -287,6 +287,7 @@ async function handleIncomingMessage(
         incomingMessage: textForAutomation,
         accessToken: access_token,
         phoneNumberId: phone_number_id,
+        wasVoiceNote: type === 'audio' && !!transcript,
       }).catch((err) => console.error('[webhook] ai auto-reply error:', err));
     }
   } else {
@@ -783,6 +784,39 @@ function parseAutomationDuration(str: string): number {
   return n;
 }
 
+// ── Text-to-speech reply (voice note in, voice note back) ────────────────────
+async function synthesizeSpeech(text: string, apiKey: string): Promise<Buffer | null> {
+  const res = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: text, response_format: 'mp3' }),
+  });
+  if (!res.ok) {
+    console.error('[ai] TTS failed:', await res.text().catch(() => res.statusText));
+    return null;
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+async function uploadMetaMedia(accessToken: string, phoneNumberId: string, buffer: Buffer): Promise<string | null> {
+  const GRAPH_V = process.env.WHATSAPP_API_VERSION || 'v21.0';
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('file', new Blob([new Uint8Array(buffer)], { type: 'audio/mpeg' }), 'reply.mp3');
+  form.append('type', 'audio/mpeg');
+  const res = await fetch(`https://graph.facebook.com/${GRAPH_V}/${phoneNumberId}/media`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+  if (!res.ok) {
+    console.error('[ai] media upload failed:', await res.text().catch(() => res.statusText));
+    return null;
+  }
+  const json = await res.json();
+  return json.id || null;
+}
+
 // ── AI Auto-reply ─────────────────────────────────────────────────────────────
 async function executeAiAutoReply(ctx: {
   companyId: string;
@@ -792,6 +826,7 @@ async function executeAiAutoReply(ctx: {
   incomingMessage: string;
   accessToken: string;
   phoneNumberId: string;
+  wasVoiceNote?: boolean;
 }) {
   const openaiKey = await resolveAiProviderKey(adminSupabase);
   if (!openaiKey) return; // not configured
@@ -863,20 +898,41 @@ async function executeAiAutoReply(ctx: {
 
   console.log('[ai] sending auto-reply:', replyText.substring(0, 80));
 
-  // Send via WhatsApp
   const toPhone = ctx.contactPhone.replace(/\D/g, '');
   const GRAPH_V = process.env.WHATSAPP_API_VERSION || 'v21.0';
-  const sendRes = await fetch(`https://graph.facebook.com/${GRAPH_V}/${ctx.phoneNumberId}/messages`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: toPhone,
-      type: 'text',
-      text: { body: replyText },
-    }),
-  });
-  const sendJson = await sendRes.json();
+
+  // If the inbound message was a voice note, reply in kind — synthesize speech and
+  // send as an audio message. Falls back to text if TTS/upload fails for any reason.
+  let sendJson: any = null;
+  let sentType: 'text' | 'audio' = 'text';
+  if (ctx.wasVoiceNote) {
+    try {
+      const speech = await synthesizeSpeech(replyText, openaiKey);
+      const mediaId = speech ? await uploadMetaMedia(ctx.accessToken, ctx.phoneNumberId, speech) : null;
+      if (mediaId) {
+        const audioRes = await fetch(`https://graph.facebook.com/${GRAPH_V}/${ctx.phoneNumberId}/messages`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'audio', audio: { id: mediaId } }),
+        });
+        sendJson = await audioRes.json();
+        sentType = 'audio';
+      }
+    } catch (err) {
+      console.error('[ai] voice reply error, falling back to text:', err);
+    }
+  }
+
+  if (!sendJson) {
+    const sendRes = await fetch(`https://graph.facebook.com/${GRAPH_V}/${ctx.phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'text', text: { body: replyText } }),
+    });
+    sendJson = await sendRes.json();
+    sentType = 'text';
+  }
+
   const waId = sendJson.messages?.[0]?.id;
 
   // Store in DB so it appears in inbox
@@ -886,7 +942,7 @@ async function executeAiAutoReply(ctx: {
       company_id: ctx.companyId,
       channel_id: ctx.channelId,
       direction: 'outbound',
-      type: 'text',
+      type: sentType,
       content: replyText,
       status: 'sent',
       wa_message_id: waId,
