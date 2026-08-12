@@ -26,8 +26,7 @@ Otherwise, ask clarifying questions to understand what they need.
 Available triggers:
 - message_received: fires on every inbound WhatsApp message
 - keyword_matched: fires when message contains specific keywords (set keywords array)
-- new_contact: fires when a new contact is created
-- new_conversation: fires when a new conversation starts
+- new_contact: fires on the first message of a conversation (no prior open conversation with this contact on this channel)
 
 Available node types and their configs:
 - sendMessage → config: { message: "text, use {{var_name}} for variables" }

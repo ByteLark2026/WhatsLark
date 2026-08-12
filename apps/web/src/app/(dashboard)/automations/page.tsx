@@ -49,7 +49,6 @@ const TRIGGER_LABELS: Record<string, string> = {
   message_received: 'Message received',
   keyword_matched: 'Keyword matched',
   new_contact: 'New contact',
-  new_conversation: 'New conversation',
 };
 
 interface AgentTemplate {
@@ -493,7 +492,6 @@ export default function AutomationsPage() {
                   <SelectItem value="message_received">Message Received</SelectItem>
                   <SelectItem value="keyword_matched">Keyword Matched</SelectItem>
                   <SelectItem value="new_contact">New Contact</SelectItem>
-                  <SelectItem value="new_conversation">New Conversation</SelectItem>
                 </SelectContent>
               </Select>
             </div>

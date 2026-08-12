@@ -439,23 +439,24 @@ async function executeAutomations(ctx: {
   contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
   isNewConversation: boolean;
 }) {
-  const { data: rules } = await adminSupabase
+  const { data: rules, error: rulesError } = await adminSupabase
     .from('automation_rules')
     .select('*')
     .eq('company_id', ctx.companyId)
-    .in('trigger', ['message_received', 'keyword_matched', 'new_contact', 'new_conversation'])
+    .in('trigger', ['message_received', 'keyword_matched', 'new_contact'])
     .eq('is_active', true);
 
+  if (rulesError) { console.error('[automation] rules query failed:', rulesError.message); return; }
   if (!rules?.length) return;
 
   for (const rule of rules) {
     const config = rule.trigger_config || {};
     const lowerMsg = ctx.messageText.toLowerCase();
 
-    // new_contact/new_conversation only fire on the first message of a conversation —
-    // approximated here as "no prior open conversation existed" since we don't track a
-    // separate contact-creation event through this path.
-    if ((rule.trigger === 'new_contact' || rule.trigger === 'new_conversation') && !ctx.isNewConversation) continue;
+    // new_contact only fires on the first message of a conversation — approximated here
+    // as "no prior open conversation existed" since we don't track a separate
+    // contact-creation event through this path.
+    if (rule.trigger === 'new_contact' && !ctx.isNewConversation) continue;
 
     if (rule.trigger === 'keyword_matched') {
       if (!config.keywords?.length) continue;
