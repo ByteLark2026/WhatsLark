@@ -8,9 +8,16 @@ const GRAPH_VERSION = process.env.WHATSAPP_API_VERSION || 'v21.0';
 
 type FlowCtx = {
   companyId: string; channelId: string; conversationId: string;
-  contactPhone: string; accessToken: string; phoneNumberId: string;
+  contactId: string; contactPhone: string; accessToken: string; phoneNumberId: string;
   messageText: string; vars: Record<string, string>;
 };
+
+function validationError(type: string, value: string): string | null {
+  if (type === 'email') {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) ? null : "That doesn't look like a valid email — could you send it again?";
+  }
+  return null;
+}
 
 @Injectable()
 export class WhatsAppWebhookService {
@@ -206,14 +213,14 @@ export class WhatsAppWebhookService {
     if (hasUsableText) {
       const resumed = await this.resumePausedFlow({
         companyId, channelId: channel.id, conversationId: conversation.id,
-        contactPhone: phone, messageText: content,
+        contactId: contact.id, contactPhone: phone, messageText: content,
         accessToken: channel.access_token, phoneNumberId: channel.phone_number_id,
       }).catch((err) => { this.logger.error('Flow resume error', err); return false; });
 
       if (!resumed) {
         await this.executeAutomations({
           companyId, channelId: channel.id, conversationId: conversation.id,
-          contactPhone: phone, messageText: content,
+          contactId: contact.id, contactPhone: phone, messageText: content,
           accessToken: channel.access_token, phoneNumberId: channel.phone_number_id,
           isNewConversation,
         }).catch((err) => this.logger.error('Automation error', err));
@@ -290,7 +297,7 @@ export class WhatsAppWebhookService {
   // ── Automation flow execution ────────────────────────────────────────────────
   private async executeAutomations(ctx: {
     companyId: string; channelId: string; conversationId: string;
-    contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
+    contactId: string; contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
     isNewConversation: boolean;
   }) {
     const { data: rules, error } = await this.supabase.getAdminClient()
@@ -325,13 +332,14 @@ export class WhatsAppWebhookService {
     }
   }
 
-  private async saveFlowState(conversationId: string, companyId: string, ruleId: string, resumeNodeId: string, awaitingVariable: string | undefined, vars: Record<string, string>) {
+  private async saveFlowState(conversationId: string, companyId: string, ruleId: string, resumeNodeId: string, awaitingVariable: string | undefined, vars: Record<string, string>, awaitingNodeId?: string) {
     await this.supabase.getAdminClient().from('automation_flow_state').upsert({
       conversation_id: conversationId,
       company_id: companyId,
       rule_id: ruleId,
       resume_node_id: resumeNodeId,
       awaiting_variable: awaitingVariable || null,
+      awaiting_node_id: awaitingNodeId || null,
       vars,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'conversation_id' });
@@ -346,7 +354,7 @@ export class WhatsAppWebhookService {
    *  next node instead of the flow firing every remaining step in one burst. */
   private async resumePausedFlow(ctx: {
     companyId: string; channelId: string; conversationId: string;
-    contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
+    contactId: string; contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
   }): Promise<boolean> {
     const { data: state } = await this.supabase.getAdminClient()
       .from('automation_flow_state')
@@ -367,6 +375,27 @@ export class WhatsAppWebhookService {
     }
 
     const vars: Record<string, string> = { ...(state.vars || {}) };
+
+    // Validate the reply against the asking node's config before accepting it — on
+    // failure, re-send the question and stay paused instead of advancing with a bad value.
+    if (state.awaiting_node_id) {
+      const nodes: any[] = rule.trigger_config?.nodes || [];
+      const askNode = nodes.find((n: any) => n.id === state.awaiting_node_id);
+      const validationType = askNode?.data?.config?.validation;
+      if (validationType) {
+        const err = validationError(validationType, ctx.messageText);
+        if (err) {
+          const toPhone = ctx.contactPhone.replace(/\D/g, '');
+          await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${ctx.phoneNumberId}/messages`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'text', text: { body: err } }),
+          }).catch(() => {});
+          return true;
+        }
+      }
+    }
+
     if (state.awaiting_variable) vars[state.awaiting_variable] = ctx.messageText;
 
     await this.executeFlow(rule, { ...ctx, vars }, state.resume_node_id);
@@ -408,7 +437,7 @@ export class WhatsAppWebhookService {
         await this.executeFlowNode(node, ctx); // sends the question
         const next = edges.find((e: any) => e.source === currentId);
         if (next?.target) {
-          await this.saveFlowState(ctx.conversationId, ctx.companyId, rule.id, next.target, node.data?.config?.variable, ctx.vars);
+          await this.saveFlowState(ctx.conversationId, ctx.companyId, rule.id, next.target, node.data?.config?.variable, ctx.vars, node.id);
         } else {
           await this.clearFlowState(ctx.conversationId);
         }
@@ -444,6 +473,7 @@ export class WhatsAppWebhookService {
   private interpolate(text: string, ctx: FlowCtx): string {
     return text.replace(/\{\{(\w+)\}\}/g, (_, k) => {
       if (k === 'message') return ctx.messageText;
+      if (k === 'phone') return ctx.contactPhone;
       return ctx.vars[k] ?? `{{${k}}}`;
     });
   }
@@ -500,6 +530,25 @@ export class WhatsAppWebhookService {
             .eq('company_id', ctx.companyId)
             .eq('phone', ctx.contactPhone);
         }
+        break;
+      }
+
+      case 'createLead': {
+        const title = this.interpolate(config.title || '{{message}}', ctx);
+        const { data: lead, error: leadErr } = await this.supabase.getAdminClient()
+          .from('leads')
+          .insert({
+            company_id: ctx.companyId,
+            contact_id: ctx.contactId,
+            conversation_id: ctx.conversationId,
+            title: title || 'New lead',
+            stage: config.stage || 'new_lead',
+            notes: config.notes ? this.interpolate(config.notes, ctx) : null,
+          })
+          .select('id')
+          .single();
+        if (leadErr) this.logger.error(`createLead failed: ${leadErr.message}`);
+        else if (lead) ctx.vars['lead.id'] = lead.id;
         break;
       }
 

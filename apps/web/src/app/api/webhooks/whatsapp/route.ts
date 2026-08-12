@@ -258,6 +258,7 @@ async function handleIncomingMessage(
         companyId,
         channelId,
         conversationId: conversation.id,
+        contactId: contact.id,
         contactPhone: msg.from,
         messageText: textForAutomation,
         accessToken: access_token,
@@ -269,6 +270,7 @@ async function handleIncomingMessage(
           companyId,
           channelId,
           conversationId: conversation.id,
+          contactId: contact.id,
           contactPhone: msg.from,
           messageText: textForAutomation,
           accessToken: access_token,
@@ -447,14 +449,21 @@ const GRAPH_VERSION_AUTO = process.env.WHATSAPP_API_VERSION || 'v21.0';
 
 type FlowCtx = {
   companyId: string; channelId: string; conversationId: string;
-  contactPhone: string; accessToken: string; phoneNumberId: string;
+  contactId: string; contactPhone: string; accessToken: string; phoneNumberId: string;
   messageText: string;
   vars: Record<string, string>;
 };
 
+function validationError(type: string, value: string): string | null {
+  if (type === 'email') {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) ? null : "That doesn't look like a valid email — could you send it again?";
+  }
+  return null;
+}
+
 async function executeAutomations(ctx: {
   companyId: string; channelId: string; conversationId: string;
-  contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
+  contactId: string; contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
   isNewConversation: boolean;
 }) {
   const { data: rules, error: rulesError } = await adminSupabase
@@ -493,13 +502,14 @@ async function executeAutomations(ctx: {
   }
 }
 
-async function saveFlowState(conversationId: string, companyId: string, ruleId: string, resumeNodeId: string, awaitingVariable: string | undefined, vars: Record<string, string>) {
+async function saveFlowState(conversationId: string, companyId: string, ruleId: string, resumeNodeId: string, awaitingVariable: string | undefined, vars: Record<string, string>, awaitingNodeId?: string) {
   await adminSupabase.from('automation_flow_state').upsert({
     conversation_id: conversationId,
     company_id: companyId,
     rule_id: ruleId,
     resume_node_id: resumeNodeId,
     awaiting_variable: awaitingVariable || null,
+    awaiting_node_id: awaitingNodeId || null,
     vars,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'conversation_id' });
@@ -515,7 +525,7 @@ async function clearFlowState(conversationId: string) {
  *  very next inbound message, which is what happened before this existed. */
 async function resumePausedFlow(ctx: {
   companyId: string; channelId: string; conversationId: string;
-  contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
+  contactId: string; contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
 }): Promise<boolean> {
   const { data: state } = await adminSupabase
     .from('automation_flow_state')
@@ -536,6 +546,28 @@ async function resumePausedFlow(ctx: {
   }
 
   const vars: Record<string, string> = { ...(state.vars || {}) };
+
+  // Validate the reply against the asking node's config before accepting it — on
+  // failure, re-send the question and stay paused on the same node instead of
+  // advancing with a bad value (e.g. an unparseable email).
+  if (state.awaiting_node_id) {
+    const nodes: any[] = rule.trigger_config?.nodes || [];
+    const askNode = nodes.find((n: any) => n.id === state.awaiting_node_id);
+    const validationType = askNode?.data?.config?.validation;
+    if (validationType) {
+      const err = validationError(validationType, ctx.messageText);
+      if (err) {
+        const toPhone = ctx.contactPhone.replace(/\D/g, '');
+        await fetch(`https://graph.facebook.com/${GRAPH_VERSION_AUTO}/${ctx.phoneNumberId}/messages`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'text', text: { body: err } }),
+        }).catch(() => {});
+        return true; // stays paused on the same node — don't fall through to automations/AI reply
+      }
+    }
+  }
+
   if (state.awaiting_variable) vars[state.awaiting_variable] = ctx.messageText;
 
   await executeFlow(rule, { ...ctx, vars }, state.resume_node_id);
@@ -577,7 +609,7 @@ async function executeFlow(rule: any, ctx: FlowCtx, startNodeId?: string) {
       await executeFlowNode(node, ctx); // sends the question
       const next = edges.find((e: any) => e.source === currentId);
       if (next?.target) {
-        await saveFlowState(ctx.conversationId, ctx.companyId, rule.id, next.target, node.data?.config?.variable, ctx.vars);
+        await saveFlowState(ctx.conversationId, ctx.companyId, rule.id, next.target, node.data?.config?.variable, ctx.vars, node.id);
       } else {
         await clearFlowState(ctx.conversationId);
       }
@@ -613,6 +645,7 @@ function evaluateCondition(node: any, ctx: FlowCtx): boolean {
 function interpolate(text: string, ctx: FlowCtx): string {
   return text.replace(/\{\{(\w+)\}\}/g, (_, k) => {
     if (k === 'message') return ctx.messageText;
+    if (k === 'phone') return ctx.contactPhone;
     return ctx.vars[k] ?? `{{${k}}}`;
   });
 }
@@ -743,6 +776,25 @@ async function executeFlowNode(node: any, ctx: FlowCtx) {
           .eq('company_id', ctx.companyId)
           .eq('phone', ctx.contactPhone);
       }
+      break;
+    }
+
+    case 'createLead': {
+      const title = interpolate(config.title || '{{message}}', ctx);
+      const { data: lead, error: leadErr } = await adminSupabase
+        .from('leads')
+        .insert({
+          company_id: ctx.companyId,
+          contact_id: ctx.contactId,
+          conversation_id: ctx.conversationId,
+          title: title || 'New lead',
+          stage: config.stage || 'new_lead',
+          notes: config.notes ? interpolate(config.notes, ctx) : null,
+        })
+        .select('id')
+        .single();
+      if (leadErr) console.error('[automation] createLead failed:', leadErr.message);
+      else if (lead) ctx.vars['lead.id'] = lead.id;
       break;
     }
 

@@ -14,7 +14,7 @@ import {
   GitBranch, Clock, Variable, UserCheck, Webhook, BookOpen,
   XCircle, UserPlus, RefreshCw, ArrowLeft, Save, Plus, Loader2,
   ChevronDown, Zap, Blocks, Settings2, Play, CheckCircle2,
-  AlertCircle, SkipForward, Hash, Check, X,
+  AlertCircle, SkipForward, Hash, Check, X, Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -187,6 +187,11 @@ const nodeTypes: NodeTypes = {
       {p.data.config?.field && <p className="text-gray-500">{p.data.config.field} = {p.data.config?.value || '?'}</p>}
     </BaseNode>
   ),
+  createLead: (p: any) => (
+    <BaseNode {...p} color="bg-fuchsia-500" icon={Briefcase}>
+      {p.data.config?.title && <p className="text-gray-500 truncate">{p.data.config.title}</p>}
+    </BaseNode>
+  ),
 };
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
@@ -224,6 +229,7 @@ const PALETTE_NODES = [
     nodes: [
       { type: 'addGroup', label: 'Add Group', icon: UserPlus, color: 'bg-emerald-500' },
       { type: 'update', label: 'Update', icon: RefreshCw, color: 'bg-violet-500' },
+      { type: 'createLead', label: 'Create Lead', icon: Briefcase, color: 'bg-fuchsia-500' },
     ],
   },
 ];
@@ -503,6 +509,17 @@ export default function FlowEditorPage() {
                   value={selectedNode.data.config?.variable || ''}
                   onChange={(e) => updateNodeConfig('variable', e.target.value)} />
                 <p className="text-[10px] text-muted-foreground">Use {'{{user_name}}'} in later nodes</p>
+                <Label className="text-xs text-muted-foreground">Validate reply as</Label>
+                <Select value={selectedNode.data.config?.validation || 'none'} onValueChange={(v) => updateNodeConfig('validation', v === 'none' ? '' : v)}>
+                  <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No validation</SelectItem>
+                    <SelectItem value="email">Email address</SelectItem>
+                  </SelectContent>
+                </Select>
+                {selectedNode.data.config?.validation === 'email' && (
+                  <p className="text-[10px] text-muted-foreground">On a bad format, the bot re-asks and waits again instead of saving it</p>
+                )}
               </div>
             )}
 
@@ -725,6 +742,30 @@ export default function FlowEditorPage() {
                 <Input className="h-7 text-xs" placeholder="{{message}} or static"
                   value={selectedNode.data.config?.value || ''}
                   onChange={(e) => updateNodeConfig('value', e.target.value)} />
+              </div>
+            )}
+
+            {/* createLead */}
+            {selectedNode.data.type === 'createLead' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Lead title</Label>
+                <Input className="h-7 text-xs" placeholder="{{enquiry}} or static title"
+                  value={selectedNode.data.config?.title || ''}
+                  onChange={(e) => updateNodeConfig('title', e.target.value)} />
+                <Label className="text-xs text-muted-foreground">Stage</Label>
+                <Select value={selectedNode.data.config?.stage || 'new_lead'} onValueChange={(v) => updateNodeConfig('stage', v)}>
+                  <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new_lead">New lead</SelectItem>
+                    <SelectItem value="contacted">Contacted</SelectItem>
+                    <SelectItem value="qualified">Qualified</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Label className="text-xs text-muted-foreground">Notes (optional)</Label>
+                <Textarea className="text-xs resize-none" rows={3} placeholder="Name: {{name}}\nEmail: {{email}}\nPhone: {{phone}}"
+                  value={selectedNode.data.config?.notes || ''}
+                  onChange={(e) => updateNodeConfig('notes', e.target.value)} />
+                <p className="text-[10px] text-muted-foreground">Creates/uses the contact already on this conversation and saves a lead in the CRM</p>
               </div>
             )}
 
