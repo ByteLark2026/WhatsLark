@@ -17,6 +17,29 @@ import { useToast } from '@/hooks/use-toast';
 const EXAMPLE_PROMPT =
   'A vibrant Eid Mubarak sale poster for a WhatsApp business, gold and deep-green color palette, crescent moon and lantern motifs, bold headline space at the top for "50% OFF", elegant Arabic-inspired border pattern, clean modern flat-design style, no text rendered in the image.';
 
+const PROMPT_TEMPLATES = [
+  {
+    label: 'Sale / discount',
+    prompt: 'A bold social-media sale poster for a retail business, square 1:1 format, high-contrast red and black color palette, large empty banner shape at the top for a discount percentage, product silhouette placeholder in the center, starburst/badge graphic in one corner, clean modern flat-design style, no text rendered in the image.',
+  },
+  {
+    label: 'Notice / announcement',
+    prompt: 'A clean, professional notice/announcement poster for a business, square 1:1 format, minimal white background with a single bold accent color (navy blue), simple header banner space at the top, thin rule lines separating sections, corporate flat-design style, plenty of empty space for text, no text rendered in the image.',
+  },
+  {
+    label: 'Event / webinar',
+    prompt: 'A modern event promotion poster, square 1:1 format, dark navy background with gradient purple-to-blue accents, abstract geometric shapes, empty space at top for event title and at bottom for date/time details, tech-conference flat-design style, no text rendered in the image.',
+  },
+  {
+    label: 'New product launch',
+    prompt: 'A premium product-launch poster for social media, square 1:1 format, soft gradient background (cream to light beige), centered spotlight/pedestal area for a product photo, minimalist luxury flat-design style with thin gold accent lines, generous empty space for a headline, no text rendered in the image.',
+  },
+  {
+    label: 'Festive / seasonal',
+    prompt: EXAMPLE_PROMPT,
+  },
+];
+
 interface Contact { id: string; name: string; phone: string }
 interface Channel { id: string; name: string; phone_number: string }
 
@@ -103,6 +126,24 @@ export default function AiPosterPage() {
         <Card>
           <CardContent className="p-4 sm:p-6 space-y-4">
             <div>
+              <Label>Poster style</Label>
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {PROMPT_TEMPLATES.map((t) => (
+                  <button
+                    key={t.label}
+                    type="button"
+                    onClick={() => setPrompt(t.prompt)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      prompt === t.prompt ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
               <Label>Prompt</Label>
               <Textarea
                 value={prompt}
@@ -111,13 +152,9 @@ export default function AiPosterPage() {
                 rows={6}
                 className="mt-1.5"
               />
-              <button
-                type="button"
-                onClick={() => setPrompt(EXAMPLE_PROMPT)}
-                className="text-xs text-primary mt-1.5 hover:underline"
-              >
-                Use example prompt
-              </button>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Pick a style above to load a ready-made prompt, then tweak the details (colors, offer, wording cues) before generating.
+              </p>
             </div>
 
             <div>
