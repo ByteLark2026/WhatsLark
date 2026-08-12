@@ -11,9 +11,16 @@ export async function resolveAiProviderKey(supabase: SupabaseClient, provider: s
     .select('api_key')
     .eq('provider', provider)
     .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (data?.api_key) return decryptToken(data.api_key);
+    .order('created_at', { ascending: false });
+
+  // Try each active key newest-first — a row can become undecryptable if
+  // TOKEN_ENCRYPTION_KEY changes after it was saved; don't let that break AI calls
+  // entirely when a newer, valid key (or the env var) is available.
+  for (const row of data || []) {
+    try {
+      const key = decryptToken(row.api_key);
+      if (key) return key;
+    } catch { /* try the next one */ }
+  }
   return process.env.OPENAI_API_KEY || '';
 }

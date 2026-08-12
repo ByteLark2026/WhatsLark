@@ -394,10 +394,17 @@ export class SuperAdminContentService {
       .order('created_at', { ascending: false });
     if (error) throw new BadRequestException(error.message);
 
-    return (data || []).map(({ api_key, ...rest }) => ({
-      ...rest,
-      api_key_masked: this.maskSecret(decryptToken(api_key)),
-    }));
+    return (data || []).map(({ api_key, ...rest }) => {
+      // A row can become undecryptable if TOKEN_ENCRYPTION_KEY changes after it was
+      // saved — don't let one bad row take down the whole list.
+      let masked: string | null;
+      try {
+        masked = this.maskSecret(decryptToken(api_key));
+      } catch {
+        masked = 'unreadable — re-add this key';
+      }
+      return { ...rest, api_key_masked: masked };
+    });
   }
 
   async createAiProviderKey(dto: { provider?: string; label: string; api_key: string }) {
