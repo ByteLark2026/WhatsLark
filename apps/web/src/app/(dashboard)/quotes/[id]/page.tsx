@@ -8,10 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Header } from '@/components/layout/header';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/lib/supabase';
+import { useAuthStore } from '@/store/auth';
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-600', sent: 'bg-blue-100 text-blue-700',
@@ -27,7 +30,10 @@ export default function QuoteBuilderPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { toast } = useToast();
+  const { company } = useAuthStore();
   const [quote, setQuote] = useState<any>(null);
+  const [contacts, setContacts] = useState<{ id: string; name: string; phone: string }[]>([]);
+  const [changingContact, setChangingContact] = useState(false);
   const [lineItems, setLineItems] = useState<LineItem[]>([newItem()]);
   const [taxRate, setTaxRate] = useState(0);
   const [discount, setDiscount] = useState(0);
@@ -47,6 +53,27 @@ export default function QuoteBuilderPage() {
       setNotes(data.notes || ''); setTerms(data.terms || '');
     });
   }, [id]);
+
+  useEffect(() => {
+    if (!company?.id) return;
+    createClient()
+      .from('contacts')
+      .select('id, name, phone')
+      .eq('company_id', company.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setContacts(data || []));
+  }, [company?.id]);
+
+  const setContact = async (contactId: string) => {
+    try {
+      const updated = await api.patch<any>(`/quotations/${id}`, { contact_id: contactId });
+      const contact = contacts.find((c) => c.id === contactId);
+      setQuote({ ...updated, contacts: contact });
+      setChangingContact(false);
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
 
   const updateItem = (itemId: string, field: keyof LineItem, val: any) => {
     setLineItems((prev) => prev.map((item) => {
@@ -140,7 +167,23 @@ export default function QuoteBuilderPage() {
       <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
           <Badge className={cn('text-xs', STATUS_STYLES[quote.status])}>{quote.status}</Badge>
-          {quote.contacts?.name && <span className="text-sm text-muted-foreground">Client: <strong>{quote.contacts.name}</strong></span>}
+          {changingContact ? (
+            <Select value={quote.contact_id || ''} onValueChange={setContact}>
+              <SelectTrigger className="h-7 text-xs w-56"><SelectValue placeholder="Select a contact…" /></SelectTrigger>
+              <SelectContent>
+                {contacts.map((c) => (
+                  <SelectItem key={c.id} value={c.id} className="text-xs">{c.name} ({c.phone})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : quote.contacts?.name ? (
+            <span className="text-sm text-muted-foreground">
+              Client: <strong>{quote.contacts.name}</strong>{quote.contacts.phone ? ` (${quote.contacts.phone})` : ''}{' '}
+              <button className="text-xs underline text-primary" onClick={() => setChangingContact(true)}>change</button>
+            </span>
+          ) : (
+            <button className="text-xs text-primary underline" onClick={() => setChangingContact(true)}>+ Link a contact</button>
+          )}
         </div>
 
         <div className="grid sm:grid-cols-3 gap-4">
