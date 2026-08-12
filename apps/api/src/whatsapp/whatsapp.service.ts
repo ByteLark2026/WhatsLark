@@ -332,6 +332,29 @@ export class WhatsAppService {
     return response.data?.messages?.[0]?.id;
   }
 
+  async sendImageMessage(channelId: string, to: string, imageUrl: string, caption?: string): Promise<string> {
+    const channel = await this.getChannelWithToken(channelId);
+
+    const response = await axios.post(
+      `${this.baseUrl}/${this.apiVersion}/${channel.phone_number_id}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: to.replace(/\D/g, ''),
+        type: 'image',
+        image: { link: imageUrl, ...(caption ? { caption } : {}) },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${channel.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+
+    return response.data?.messages?.[0]?.id;
+  }
+
   async markMessageRead(channelId: string, waMessageId: string) {
     const channel = await this.getChannelWithToken(channelId);
     await axios.post(
