@@ -123,7 +123,23 @@ export class WhatsAppWebhookService {
     if (!contact) return;
 
     // Extract message content
-    const { type, content, mediaUrl } = this.extractContent(msg);
+    const extracted = this.extractContent(msg);
+    const { type, mediaUrl } = extracted;
+    let content = extracted.content;
+
+    // Transcribe inbound voice notes so agents/AI can read them without downloading audio.
+    let transcript: string | null = null;
+    if (type === 'audio' && mediaUrl) {
+      try {
+        const media = await this.fetchMetaMedia(channel.access_token, mediaUrl);
+        if (media) {
+          transcript = await this.transcribeAudio(media.buffer, media.contentType);
+          if (transcript) content = transcript;
+        }
+      } catch (err) {
+        this.logger.error('Voice note transcription error', err as any);
+      }
+    }
 
     // Honor STOP/UNSUBSCRIBE as an opt-out — blocked contacts are skipped by campaign sends.
     if (type === 'text' && ['stop', 'unsubscribe', 'opt out', 'optout'].includes(content.trim().toLowerCase())) {
@@ -162,7 +178,7 @@ export class WhatsAppWebhookService {
         status: 'delivered',
         wa_message_id: msg.id,
         is_note: false,
-        metadata: msg,
+        metadata: transcript ? { ...msg, transcript } : msg,
       });
 
     // Update conversation
@@ -183,7 +199,11 @@ export class WhatsAppWebhookService {
 
     this.logger.log(`New message from ${phone} in conversation ${conversation.id}`);
 
-    if (type === 'text') {
+    // Automations/AI-reply need real text — either a text message, or a voice note that
+    // was successfully transcribed above (content already holds the transcript by then).
+    const hasUsableText = type === 'text' || (type === 'audio' && !!transcript);
+
+    if (hasUsableText) {
       const resumed = await this.resumePausedFlow({
         companyId, channelId: channel.id, conversationId: conversation.id,
         contactPhone: phone, messageText: content,
@@ -564,6 +584,45 @@ export class WhatsAppWebhookService {
         status: 'sent', wa_message_id: json.messages[0].id, is_note: false,
       });
     }
+  }
+
+  private async fetchMetaMedia(accessToken: string, mediaId: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+    const metaRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${mediaId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!metaRes.ok) return null;
+    const { url: downloadUrl } = await metaRes.json();
+    if (!downloadUrl) return null;
+
+    const fileRes = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!fileRes.ok) return null;
+
+    return {
+      buffer: Buffer.from(await fileRes.arrayBuffer()),
+      contentType: fileRes.headers.get('content-type') || 'audio/ogg',
+    };
+  }
+
+  private async transcribeAudio(buffer: Buffer, contentType: string): Promise<string | null> {
+    const apiKey = await resolveAiProviderKey(this.supabase.getAdminClient());
+    if (!apiKey) return null;
+
+    const ext = contentType.includes('mp4') ? 'mp4' : contentType.includes('mpeg') ? 'mp3' : 'ogg';
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(buffer)], { type: contentType }), `voice-note.${ext}`);
+    form.append('model', 'whisper-1');
+
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+    });
+    if (!res.ok) {
+      this.logger.error(`Transcription failed: ${await res.text().catch(() => res.statusText)}`);
+      return null;
+    }
+    const json = await res.json();
+    return json.text?.trim() || null;
   }
 
   private extractContent(msg: any): { type: string; content: string; mediaUrl?: string } {

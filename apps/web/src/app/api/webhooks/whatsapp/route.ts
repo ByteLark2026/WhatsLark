@@ -227,6 +227,10 @@ async function handleIncomingMessage(
     .eq('wa_message_id', msg.id)
     .maybeSingle();
 
+  // Automations/AI-reply need real text — either a text message, or a voice note that
+  // was successfully transcribed above (content already holds the transcript by then).
+  const textForAutomation = type === 'text' || (type === 'audio' && transcript) ? content : '';
+
   if (!existing) {
     console.log('[webhook] inserting message wa_message_id:', msg.id);
     const { error: insertErr } = await adminSupabase
@@ -255,7 +259,7 @@ async function handleIncomingMessage(
         channelId,
         conversationId: conversation.id,
         contactPhone: msg.from,
-        messageText: type === 'text' ? content : '',
+        messageText: textForAutomation,
         accessToken: access_token,
         phoneNumberId: phone_number_id,
       }).catch((err) => { console.error('[webhook] flow resume error:', err); return false; });
@@ -266,7 +270,7 @@ async function handleIncomingMessage(
           channelId,
           conversationId: conversation.id,
           contactPhone: msg.from,
-          messageText: type === 'text' ? content : '',
+          messageText: textForAutomation,
           accessToken: access_token,
           phoneNumberId: phone_number_id,
           isNewConversation,
@@ -280,7 +284,7 @@ async function handleIncomingMessage(
         channelId,
         conversationId: conversation.id,
         contactPhone: msg.from,
-        incomingMessage: type === 'text' ? content : '',
+        incomingMessage: textForAutomation,
         accessToken: access_token,
         phoneNumberId: phone_number_id,
       }).catch((err) => console.error('[webhook] ai auto-reply error:', err));
