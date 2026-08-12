@@ -2,6 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { SupabaseService } from '../common/supabase.service';
 import { WhatsAppService } from './whatsapp.service';
+import { resolveAiProviderKey } from '../common/ai-key.util';
+
+const GRAPH_VERSION = process.env.WHATSAPP_API_VERSION || 'v21.0';
+
+type FlowCtx = {
+  companyId: string; channelId: string; conversationId: string;
+  contactPhone: string; accessToken: string; phoneNumberId: string;
+  messageText: string; vars: Record<string, string>;
+};
 
 @Injectable()
 export class WhatsAppWebhookService {
@@ -124,15 +133,28 @@ export class WhatsAppWebhookService {
         .eq('id', contact.id);
     }
 
+    // Deduplicate — Meta retries delivery on slow/non-2xx responses, which would
+    // otherwise insert the same message multiple times and re-run automations for it.
+    const { data: existingMsg } = await this.supabase.getAdminClient()
+      .from('messages')
+      .select('id')
+      .eq('wa_message_id', msg.id)
+      .maybeSingle();
+    if (existingMsg) {
+      this.logger.log(`Duplicate message, skipping: ${msg.id}`);
+      return;
+    }
+
     // Find or create conversation
-    let conversation = await this.findOrCreateConversation(companyId, contact.id, channel.id);
+    const { conversation, isNew: isNewConversation } = await this.findOrCreateConversation(companyId, contact.id, channel.id);
 
     // Save message
-    const { data: message } = await this.supabase.getAdminClient()
+    await this.supabase.getAdminClient()
       .from('messages')
       .insert({
         conversation_id: conversation.id,
         company_id: companyId,
+        channel_id: channel.id,
         direction: 'inbound',
         type,
         content,
@@ -141,9 +163,7 @@ export class WhatsAppWebhookService {
         wa_message_id: msg.id,
         is_note: false,
         metadata: msg,
-      })
-      .select()
-      .single();
+      });
 
     // Update conversation
     await this.supabase.getAdminClient()
@@ -151,7 +171,7 @@ export class WhatsAppWebhookService {
       .update({
         last_message_at: new Date().toISOString(),
         last_message_preview: content.substring(0, 100),
-        unread_count: conversation.unread_count + 1,
+        unread_count: (conversation.unread_count ?? 0) + 1,
         status: 'open',
       })
       .eq('id', conversation.id);
@@ -162,6 +182,21 @@ export class WhatsAppWebhookService {
     } catch {}
 
     this.logger.log(`New message from ${phone} in conversation ${conversation.id}`);
+
+    if (type === 'text') {
+      await this.executeAutomations({
+        companyId, channelId: channel.id, conversationId: conversation.id,
+        contactPhone: phone, messageText: content,
+        accessToken: channel.access_token, phoneNumberId: channel.phone_number_id,
+        isNewConversation,
+      }).catch((err) => this.logger.error('Automation error', err));
+
+      await this.executeAiAutoReply({
+        companyId, channelId: channel.id, conversationId: conversation.id,
+        contactPhone: phone, incomingMessage: content,
+        accessToken: channel.access_token, phoneNumberId: channel.phone_number_id,
+      }).catch((err) => this.logger.error('AI auto-reply error', err));
+    }
   }
 
   private async handleStatusUpdate(status: any) {
@@ -199,9 +234,11 @@ export class WhatsAppWebhookService {
       .eq('contact_id', contactId)
       .eq('channel_id', channelId)
       .neq('status', 'closed')
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (existing) return existing;
+    if (existing) return { conversation: existing, isNew: false };
 
     const { data: created } = await this.supabase.getAdminClient()
       .from('conversations')
@@ -215,7 +252,240 @@ export class WhatsAppWebhookService {
       .select()
       .single();
 
-    return created;
+    return { conversation: created, isNew: true };
+  }
+
+  // ── Automation flow execution ────────────────────────────────────────────────
+  private async executeAutomations(ctx: {
+    companyId: string; channelId: string; conversationId: string;
+    contactPhone: string; messageText: string; accessToken: string; phoneNumberId: string;
+    isNewConversation: boolean;
+  }) {
+    const { data: rules, error } = await this.supabase.getAdminClient()
+      .from('automation_rules')
+      .select('*')
+      .eq('company_id', ctx.companyId)
+      .in('trigger', ['message_received', 'keyword_matched', 'new_contact'])
+      .eq('is_active', true);
+
+    if (error) { this.logger.error(`Automation rules query failed: ${error.message}`); return; }
+    if (!rules?.length) return;
+
+    for (const rule of rules) {
+      const config = rule.trigger_config || {};
+      const lowerMsg = ctx.messageText.toLowerCase();
+
+      if (rule.trigger === 'new_contact' && !ctx.isNewConversation) continue;
+
+      if (rule.trigger === 'keyword_matched') {
+        if (!config.keywords?.length) continue;
+        const match = config.keywords.some((kw: string) => lowerMsg.includes(kw.toLowerCase()));
+        if (!match) continue;
+      } else if (rule.trigger === 'message_received' && config.keywords?.length) {
+        const match = config.keywords.some((kw: string) => lowerMsg.includes(kw.toLowerCase()));
+        if (!match) continue;
+      }
+
+      this.logger.log(`Executing automation rule: ${rule.id} ${rule.name}`);
+      await this.executeFlow(rule, { ...ctx, vars: {} }).catch((err) =>
+        this.logger.error(`Flow error for rule ${rule.id}`, err),
+      );
+    }
+  }
+
+  private async executeFlow(rule: any, ctx: FlowCtx) {
+    const nodes: any[] = rule.trigger_config?.nodes || [];
+    const edges: any[] = rule.trigger_config?.edges || [];
+    if (!nodes.length) return;
+
+    const nodeMap = new Map(nodes.map((n: any) => [n.id, n]));
+    const startNode = nodes.find((n: any) => n.type === 'start');
+    let currentId = startNode?.id || '';
+    if (!currentId) return;
+    const visited = new Set<string>();
+
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
+      const node = nodeMap.get(currentId);
+      if (!node || node.type === 'end') break;
+
+      if (node.type === 'condition') {
+        const branch = this.evaluateCondition(node, ctx);
+        const next = edges.find((e: any) => e.source === currentId && e.sourceHandle === (branch ? 'yes' : 'no'))
+          || edges.find((e: any) => e.source === currentId);
+        currentId = next?.target || '';
+        continue;
+      }
+
+      if (node.type !== 'start') {
+        await this.executeFlowNode(node, ctx);
+      }
+
+      const next = edges.find((e: any) => e.source === currentId);
+      currentId = next?.target || '';
+    }
+  }
+
+  private evaluateCondition(node: any, ctx: FlowCtx): boolean {
+    const config = node.data?.config || {};
+    const ct: string = config.conditionType || 'message_contains';
+    const cv: string = config.conditionValue || '';
+    const msg = ctx.messageText.toLowerCase();
+
+    if (ct === 'always_true') return true;
+    if (ct === 'message_contains') return msg.includes(cv.toLowerCase());
+    if (ct === 'message_equals') return msg === cv.toLowerCase();
+    if (ct === 'variable_equals') {
+      const [varName, varVal] = cv.split('=').map((s: string) => s.trim());
+      return ctx.vars[varName] === varVal;
+    }
+    return false;
+  }
+
+  private interpolate(text: string, ctx: FlowCtx): string {
+    return text.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+      if (k === 'message') return ctx.messageText;
+      return ctx.vars[k] ?? `{{${k}}}`;
+    });
+  }
+
+  private async executeFlowNode(node: any, ctx: FlowCtx) {
+    const config = node.data?.config || {};
+    const toPhone = ctx.contactPhone.replace(/\D/g, '');
+
+    switch (node.type) {
+      case 'sendMessage': {
+        if (!config.message) break;
+        const body = this.interpolate(config.message, ctx);
+        const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${ctx.phoneNumberId}/messages`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'text', text: { body } }),
+        });
+        const json = await res.json();
+        const waId = json.messages?.[0]?.id;
+        if (waId) {
+          await this.supabase.getAdminClient().from('messages').insert({
+            conversation_id: ctx.conversationId, company_id: ctx.companyId, channel_id: ctx.channelId,
+            direction: 'outbound', type: 'text', content: body,
+            status: 'sent', wa_message_id: waId, is_note: false,
+          });
+        }
+        break;
+      }
+
+      case 'askQuestion': {
+        if (!config.question) break;
+        const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${ctx.phoneNumberId}/messages`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'text', text: { body: config.question } }),
+        });
+        const json = await res.json();
+        if (json.messages?.[0]?.id) {
+          await this.supabase.getAdminClient().from('messages').insert({
+            conversation_id: ctx.conversationId, company_id: ctx.companyId, channel_id: ctx.channelId,
+            direction: 'outbound', type: 'text', content: config.question,
+            status: 'sent', wa_message_id: json.messages[0].id, is_note: false,
+          });
+        }
+        break;
+      }
+
+      case 'update': {
+        const val = this.interpolate(config.value || '', ctx);
+        const allowed = ['name', 'email', 'notes'];
+        if (allowed.includes(config.field)) {
+          await this.supabase.getAdminClient().from('contacts')
+            .update({ [config.field]: val })
+            .eq('company_id', ctx.companyId)
+            .eq('phone', ctx.contactPhone);
+        }
+        break;
+      }
+
+      case 'variable': {
+        const k = config.varName;
+        const v = config.varValue || '';
+        if (k) ctx.vars[k] = this.interpolate(v, ctx);
+        break;
+      }
+
+      case 'webhook': {
+        if (!config.url) break;
+        const method = config.method || 'POST';
+        const bodyStr = config.body ? this.interpolate(config.body, ctx) : undefined;
+        await fetch(config.url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          ...(bodyStr && method !== 'GET' ? { body: bodyStr } : {}),
+        }).catch((err) => this.logger.error('Automation webhook node error', err));
+        break;
+      }
+
+      default:
+        this.logger.log(`Unhandled automation node type: ${node.type}`);
+    }
+  }
+
+  // ── AI auto-reply ─────────────────────────────────────────────────────────────
+  private async executeAiAutoReply(ctx: {
+    companyId: string; channelId: string; conversationId: string;
+    contactPhone: string; incomingMessage: string; accessToken: string; phoneNumberId: string;
+  }) {
+    const { data: settings } = await this.supabase.getAdminClient()
+      .from('ai_settings')
+      .select('*')
+      .eq('company_id', ctx.companyId)
+      .maybeSingle();
+    if (!settings?.is_enabled || !settings?.auto_reply) return;
+
+    const openaiKey = await resolveAiProviderKey(this.supabase.getAdminClient());
+    if (!openaiKey) return;
+
+    const { data: history } = await this.supabase.getAdminClient()
+      .from('messages')
+      .select('direction, content')
+      .eq('conversation_id', ctx.conversationId)
+      .eq('is_note', false)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    const chatMessages = [
+      { role: 'system', content: settings.system_prompt || 'You are a helpful customer support assistant.' },
+      ...(history || []).reverse().map((m: any) => ({
+        role: m.direction === 'inbound' ? 'user' : 'assistant',
+        content: m.content,
+      })),
+    ];
+
+    const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: settings.model || 'gpt-4o-mini', messages: chatMessages, max_tokens: 300, temperature: 0.7 }),
+    });
+    if (!aiRes.ok) {
+      this.logger.error(`AI auto-reply: OpenAI call failed (${aiRes.status})`);
+      return;
+    }
+    const aiJson = await aiRes.json();
+    const replyText = aiJson.choices?.[0]?.message?.content?.trim();
+    if (!replyText) return;
+
+    const toPhone = ctx.contactPhone.replace(/\D/g, '');
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${ctx.phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to: toPhone, type: 'text', text: { body: replyText } }),
+    });
+    const json = await res.json();
+    if (json.messages?.[0]?.id) {
+      await this.supabase.getAdminClient().from('messages').insert({
+        conversation_id: ctx.conversationId, company_id: ctx.companyId, channel_id: ctx.channelId,
+        direction: 'outbound', type: 'text', content: replyText,
+        status: 'sent', wa_message_id: json.messages[0].id, is_note: false,
+      });
+    }
   }
 
   private extractContent(msg: any): { type: string; content: string; mediaUrl?: string } {
