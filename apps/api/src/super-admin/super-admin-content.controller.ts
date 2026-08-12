@@ -49,4 +49,10 @@ export class SuperAdminContentController {
   // Payment Gateway Settings
   @Get('payment-gateway') listPaymentGatewaySettings() { return this.service.listPaymentGatewaySettings(); }
   @Patch('payment-gateway/:provider') upsertPaymentGatewaySettings(@Param('provider') provider: string, @Body() dto: any) { return this.service.upsertPaymentGatewaySettings(provider, dto); }
+
+  // AI Provider Keys
+  @Get('ai-keys') listAiProviderKeys() { return this.service.listAiProviderKeys(); }
+  @Post('ai-keys') createAiProviderKey(@Body() dto: any) { return this.service.createAiProviderKey(dto); }
+  @Patch('ai-keys/:id') updateAiProviderKey(@Param('id') id: string, @Body() dto: any) { return this.service.updateAiProviderKey(id, dto); }
+  @Delete('ai-keys/:id') deleteAiProviderKey(@Param('id') id: string) { return this.service.deleteAiProviderKey(id); }
 }

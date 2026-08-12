@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Building2, Users, Shield, LogOut, MessageSquare, Menu,
   Radio, Megaphone, FileText, Contact, BarChart3, Bell, CreditCard, Layers,
-  Receipt, Wallet, LifeBuoy, Smartphone,
+  Receipt, Wallet, LifeBuoy, Smartphone, KeyRound,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
@@ -36,6 +36,7 @@ const adminNav = [
   { href: '/admin/transactions', label: 'Transactions Logs', icon: Receipt },
   { href: '/admin/message-logs', label: 'Message Logs', icon: MessageSquare },
   { href: '/admin/payment-gateway', label: 'Payment Gateway', icon: Wallet },
+  { href: '/admin/ai-keys', label: 'AI Keys', icon: KeyRound },
   { href: '/admin/support-tickets', label: 'Support Tickets', icon: LifeBuoy },
   { href: '/admin/app-update', label: 'App Update', icon: Smartphone },
 ];

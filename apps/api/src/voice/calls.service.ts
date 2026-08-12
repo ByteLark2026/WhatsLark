@@ -3,6 +3,7 @@ import { jwt as twilioJwt, twiml as twilioTwiml, validateRequest } from 'twilio'
 import OpenAI from 'openai';
 import { SupabaseService } from '../common/supabase.service';
 import { resolveCompanyId } from '../common/company-cache.util';
+import { resolveAiProviderKey } from '../common/ai-key.util';
 import { VoiceChannelsService } from './voice-channels.service';
 
 const { AccessToken } = twilioJwt;
@@ -20,13 +21,17 @@ const AI_SYSTEM_PROMPT = `You are a helpful phone support assistant. Reply in th
 @Injectable()
 export class CallsService {
   private readonly logger = new Logger(CallsService.name);
-  private readonly openai: OpenAI;
 
   constructor(
     private readonly supabase: SupabaseService,
     private readonly voiceChannels: VoiceChannelsService,
-  ) {
-    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  ) {}
+
+  /** Built fresh per call so an admin-added/switched key in ai_provider_keys takes
+   *  effect immediately, without redeploying. */
+  private async getOpenAiClient(): Promise<OpenAI> {
+    const apiKey = await resolveAiProviderKey(this.supabase.getAdminClient());
+    return new OpenAI({ apiKey });
   }
 
   async getCompanyId(userId: string): Promise<string> {
@@ -228,7 +233,8 @@ export class CallsService {
     const wantsHuman = /\b(human|agent|person|representative)\b/i.test(transcript);
     let replyText: string;
     try {
-      const completion = await this.openai.chat.completions.create({
+      const openai = await this.getOpenAiClient();
+      const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [{ role: 'system', content: AI_SYSTEM_PROMPT }, ...history] as any,
         max_tokens: 150,
@@ -305,7 +311,7 @@ export class CallsService {
   }
 
   private async transcribe(buffer: Buffer, contentType: string): Promise<string | null> {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = await resolveAiProviderKey(this.supabase.getAdminClient());
     if (!apiKey) return null;
     const form = new FormData();
     form.append('file', new Blob([new Uint8Array(buffer)], { type: contentType }), 'call.mp3');

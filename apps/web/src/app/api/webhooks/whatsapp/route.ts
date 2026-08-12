@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { decryptToken } from '@/lib/token-crypto';
+import { resolveAiProviderKey } from '@/lib/ai-key';
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -306,7 +307,7 @@ async function fetchMetaMedia(accessToken: string, mediaId: string): Promise<{ b
 }
 
 async function transcribeAudio(buffer: Buffer, contentType: string): Promise<string | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = await resolveAiProviderKey(adminSupabase);
   if (!apiKey) return null;
 
   const ext = contentType.includes('mp4') ? 'mp4' : contentType.includes('mpeg') ? 'mp3' : 'ogg';
@@ -706,7 +707,7 @@ async function executeAiAutoReply(ctx: {
   accessToken: string;
   phoneNumberId: string;
 }) {
-  const openaiKey = process.env.OPENAI_API_KEY;
+  const openaiKey = await resolveAiProviderKey(adminSupabase);
   if (!openaiKey) return; // not configured
 
   // Load AI settings

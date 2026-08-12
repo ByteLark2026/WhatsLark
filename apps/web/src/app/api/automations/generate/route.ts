@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveAiProviderKey } from '@/lib/ai-key';
+
+const adminSupabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+);
 
 async function requireAuth(req: NextRequest): Promise<boolean> {
   const auth = req.headers.get('authorization');
@@ -84,10 +90,10 @@ export async function POST(req: NextRequest) {
     }
 
     const { message, history = [] } = await req.json();
-    const openaiKey = process.env.OPENAI_API_KEY;
+    const openaiKey = await resolveAiProviderKey(adminSupabase);
 
     if (!openaiKey) {
-      return NextResponse.json({ error: 'OPENAI_API_KEY not configured in Vercel environment variables.' }, { status: 500 });
+      return NextResponse.json({ error: 'No OpenAI key configured — add one in Admin > AI Keys, or set OPENAI_API_KEY in Vercel environment variables.' }, { status: 500 });
     }
 
     if (!message?.trim()) {

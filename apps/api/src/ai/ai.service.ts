@@ -1,13 +1,17 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import OpenAI from 'openai';
 import { SupabaseService } from '../common/supabase.service';
+import { resolveAiProviderKey } from '../common/ai-key.util';
 
 @Injectable()
 export class AiService {
-  private openai: OpenAI;
+  constructor(private readonly supabase: SupabaseService) {}
 
-  constructor(private readonly supabase: SupabaseService) {
-    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  /** Built fresh per call so an admin-added/switched key in ai_provider_keys takes
+   *  effect immediately, without redeploying. */
+  private async getClient(): Promise<OpenAI> {
+    const apiKey = await resolveAiProviderKey(this.supabase.getAdminClient());
+    return new OpenAI({ apiKey });
   }
 
   async getSettings(companyId: string) {
@@ -75,7 +79,8 @@ export class AiService {
       })),
     ];
 
-    const completion = await this.openai.chat.completions.create({
+    const openai = await this.getClient();
+    const completion = await openai.chat.completions.create({
       model: settings.model || 'gpt-4o-mini',
       messages: chatMessages,
       max_tokens: 300,

@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase.service';
+import { encryptToken, decryptToken } from '../common/token-crypto.util';
 
 @Injectable()
 export class SuperAdminContentService {
@@ -382,5 +383,55 @@ export class SuperAdminContentService {
       secret_key_masked: this.maskSecret(secret_key),
       webhook_secret_masked: this.maskSecret(webhook_secret),
     };
+  }
+
+  // ===================== AI Provider Keys =====================
+
+  async listAiProviderKeys() {
+    const { data, error } = await this.supabase.getAdminClient()
+      .from('ai_provider_keys')
+      .select('id, provider, label, api_key, is_active, created_at')
+      .order('created_at', { ascending: false });
+    if (error) throw new BadRequestException(error.message);
+
+    return (data || []).map(({ api_key, ...rest }) => ({
+      ...rest,
+      api_key_masked: this.maskSecret(decryptToken(api_key)),
+    }));
+  }
+
+  async createAiProviderKey(dto: { provider?: string; label: string; api_key: string }) {
+    if (!dto.label?.trim() || !dto.api_key?.trim()) {
+      throw new BadRequestException('label and api_key are required');
+    }
+    const { data, error } = await this.supabase.getAdminClient()
+      .from('ai_provider_keys')
+      .insert({
+        provider: dto.provider || 'openai',
+        label: dto.label.trim(),
+        api_key: encryptToken(dto.api_key.trim()),
+        is_active: true,
+      })
+      .select('id, provider, label, is_active, created_at')
+      .single();
+    if (error) throw new BadRequestException(error.message);
+    return data;
+  }
+
+  async updateAiProviderKey(id: string, dto: { is_active?: boolean; label?: string }) {
+    const { data, error } = await this.supabase.getAdminClient()
+      .from('ai_provider_keys')
+      .update({ ...dto, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select('id, provider, label, is_active, created_at')
+      .single();
+    if (error) throw new BadRequestException(error.message);
+    return data;
+  }
+
+  async deleteAiProviderKey(id: string) {
+    const { error } = await this.supabase.getAdminClient().from('ai_provider_keys').delete().eq('id', id);
+    if (error) throw new BadRequestException(error.message);
+    return { ok: true };
   }
 }
