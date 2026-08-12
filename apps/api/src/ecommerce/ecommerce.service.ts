@@ -362,7 +362,15 @@ export class EcommerceService {
       tracking_url: p.fulfillments?.[0]?.tracking_url || null,
     };
     if (topic === 'orders/create') return { ...base, event_type: 'order_placed' as const };
-    if (topic === 'orders/updated') return { ...base, event_type: 'order_confirmed' as const };
+    if (topic === 'orders/updated') {
+      // Shopify fires orders/updated for almost any change (tags, notes, risk score,
+      // fraud checks) — not just a real payment/status change. Without this check every
+      // incidental update right after order creation would also fire "confirmed", sending
+      // two customer messages back-to-back. Only treat it as "confirmed" once payment
+      // is actually captured.
+      if (p.financial_status === 'paid') return { ...base, event_type: 'order_confirmed' as const };
+      return null;
+    }
     if (topic === 'orders/fulfilled') return { ...base, event_type: 'order_shipped' as const };
     if (topic === 'orders/cancelled') return { ...base, event_type: 'order_cancelled' as const };
     if (topic === 'refunds/create') return { ...base, event_type: 'order_refunded' as const };
