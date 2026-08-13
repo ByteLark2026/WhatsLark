@@ -26,6 +26,7 @@ const BLANK = {
   business_account_id: '',
   access_token: '',
   meta_app_id: '',
+  app_secret: '',
 };
 
 export default function ChannelsPage() {
@@ -214,6 +215,7 @@ export default function ChannelsPage() {
       business_account_id: ch.business_account_id,
       access_token: '', // never pre-fill; user must re-enter to change
       meta_app_id: ch.meta_app_id || '',
+      app_secret: '', // never pre-fill; user must re-enter to change
     });
     setShowToken(false);
     setShowDialog(true);
@@ -241,6 +243,7 @@ export default function ChannelsPage() {
           meta_app_id: form.meta_app_id || null,
         };
         if (form.access_token) payload.access_token = form.access_token;
+        if (form.app_secret) payload.app_secret = form.app_secret;
 
         const updated = await api.patch<WhatsAppChannel>(`/channels/${editTarget.id}`, payload);
         setChannels((prev) => prev.map((c) => (c.id === editTarget.id ? updated : c)));
@@ -253,6 +256,7 @@ export default function ChannelsPage() {
           business_account_id: form.business_account_id,
           access_token: form.access_token,
           meta_app_id: form.meta_app_id || null,
+          app_secret: form.app_secret || null,
         });
         setChannels((prev) => [created, ...prev]);
         toast({ title: 'Channel connected', description: 'WhatsApp channel is now active.' });
@@ -656,6 +660,19 @@ export default function ChannelsPage() {
               />
               <p className="text-xs text-muted-foreground">
                 Required to upload media headers when submitting message templates for Meta review.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>App Secret {editTarget ? '(leave blank to keep existing)' : <span className="text-muted-foreground">(optional)</span>}</Label>
+              <Input
+                type="password"
+                placeholder={editTarget ? '••••••••  (unchanged)' : 'From Meta App → Settings → Basic'}
+                value={form.app_secret}
+                onChange={(e) => setForm({ ...form, app_secret: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Required to verify incoming webhook signatures and to auto-subscribe webhook fields via Diagnose.
               </p>
             </div>
           </div>

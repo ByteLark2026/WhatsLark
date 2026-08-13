@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
     }, { status: 404 });
   }
   channel.access_token = decryptToken(channel.access_token);
+  channel.app_secret = channel.app_secret ? decryptToken(channel.app_secret) : channel.app_secret;
 
   const checks: Record<string, any> = {};
 
@@ -252,7 +253,8 @@ async function subscribeAppLevelFields(channel: any, origin: string, verifyToken
   if (!channel.meta_app_id || !channel.app_secret) {
     return { attempted: false, reason: 'No meta_app_id/app_secret stored — set up webhook fields manually in Meta App Dashboard.' };
   }
-  const appAccessToken = `${channel.meta_app_id}|${channel.app_secret}`;
+  const appSecret = decryptToken(channel.app_secret);
+  const appAccessToken = `${channel.meta_app_id}|${appSecret}`;
   const callbackUrl = `${origin}/api/webhooks/whatsapp`;
   const params = new URLSearchParams({
     object: 'whatsapp_business_account',
