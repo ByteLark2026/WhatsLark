@@ -226,6 +226,7 @@ export async function POST(req: NextRequest) {
     const { data: channels, error } = await adminSupabase
       .from('whatsapp_channels')
       .select('*')
+      .eq('channel_type', 'whatsapp')
       .not('business_account_id', 'is', null);
 
     if (error) {
