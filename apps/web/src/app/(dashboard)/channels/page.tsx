@@ -336,7 +336,18 @@ export default function ChannelsPage() {
       });
       const json = await res.json();
       if (res.ok && json.ok) {
-        toast({ title: 'Webhook subscribed', description: '"messages" field is now subscribed for this WABA.' });
+        const appLevel = json.app_level;
+        if (appLevel?.attempted && !appLevel.ok) {
+          toast({
+            title: 'WABA attached, but app-level field subscribe failed',
+            description: appLevel.error_message || 'Check meta_app_id/app_secret and try again.',
+            variant: 'destructive',
+          });
+        } else if (appLevel?.attempted === false) {
+          toast({ title: 'WABA attached', description: appLevel.reason, variant: 'destructive' });
+        } else {
+          toast({ title: 'Webhook subscribed', description: '"messages" field is now subscribed for this WABA.' });
+        }
         await handleDiagnose(diagTarget);
       } else {
         toast({ title: 'Subscribe failed', description: json.error_message || 'Unknown error', variant: 'destructive' });
@@ -361,8 +372,15 @@ export default function ChannelsPage() {
       const json = await res.json();
       const results: any[] = json.results || [];
       const failed = results.filter((r) => !r.ok);
-      if (failed.length === 0) {
+      const appLevelFailed = results.filter((r) => r.app_level?.attempted && !r.app_level.ok);
+      if (failed.length === 0 && appLevelFailed.length === 0) {
         toast({ title: 'All channels subscribed', description: `${results.length} channel(s) confirmed subscribed to webhooks.` });
+      } else if (failed.length === 0) {
+        toast({
+          title: 'WABAs attached, but app-level field subscribe failed',
+          description: appLevelFailed.map((f) => `${f.name}: ${f.app_level.error_message}`).join('; '),
+          variant: 'destructive',
+        });
       } else {
         toast({
           title: `${results.length - failed.length}/${results.length} subscribed`,

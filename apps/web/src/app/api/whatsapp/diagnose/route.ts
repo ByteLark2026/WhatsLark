@@ -204,11 +204,49 @@ export async function GET(req: NextRequest) {
   });
 }
 
-async function subscribeChannel(channel: any) {
+// Sets which fields the app receives for the "whatsapp_business_account" object.
+// This is app-level config (Meta App Dashboard → Webhooks), not per-WABA — a WABA can be
+// attached to the app (subscribed_apps) yet still receive zero fields if this was never set.
+async function subscribeAppLevelFields(channel: any, origin: string, verifyToken: string) {
+  if (!channel.meta_app_id || !channel.app_secret) {
+    return { attempted: false, reason: 'No meta_app_id/app_secret stored — set up webhook fields manually in Meta App Dashboard.' };
+  }
+  const appAccessToken = `${channel.meta_app_id}|${channel.app_secret}`;
+  const callbackUrl = `${origin}/api/webhooks/whatsapp`;
+  const params = new URLSearchParams({
+    object: 'whatsapp_business_account',
+    callback_url: callbackUrl,
+    verify_token: verifyToken,
+    fields: 'messages',
+    access_token: appAccessToken,
+  });
+  try {
+    const res = await fetch(`https://graph.facebook.com/${API_VER}/${channel.meta_app_id}/subscriptions?${params}`, { method: 'POST' });
+    const json = await res.json();
+    if (!res.ok) {
+      return { attempted: true, ok: false, error_message: json.error?.message, error_code: json.error?.code };
+    }
+    return { attempted: true, ok: true, success: json.success };
+  } catch (e: any) {
+    return { attempted: true, ok: false, error_message: e.message };
+  }
+}
+
+async function subscribeChannel(channel: any, origin: string) {
   if (!channel.business_account_id) {
     return { ok: false, channel_id: channel.id, name: channel.name, error_message: 'No business_account_id set.' };
   }
   const accessToken = decryptToken(channel.access_token);
+
+  const { data: companyRow } = await adminSupabase
+    .from('companies')
+    .select('webhook_verify_token')
+    .eq('id', channel.company_id)
+    .single();
+  const verifyToken = companyRow?.webhook_verify_token || channel.webhook_verify_token || '';
+
+  const appLevel = await subscribeAppLevelFields(channel, origin, verifyToken);
+
   try {
     const res = await fetch(
       `https://graph.facebook.com/${API_VER}/${channel.business_account_id}/subscribed_apps`,
@@ -216,11 +254,11 @@ async function subscribeChannel(channel: any) {
     );
     const json = await res.json();
     if (!res.ok) {
-      return { ok: false, channel_id: channel.id, name: channel.name, error_message: json.error?.message, error_code: json.error?.code };
+      return { ok: false, channel_id: channel.id, name: channel.name, error_message: json.error?.message, error_code: json.error?.code, app_level: appLevel };
     }
-    return { ok: true, channel_id: channel.id, name: channel.name, success: json.success };
+    return { ok: true, channel_id: channel.id, name: channel.name, success: json.success, app_level: appLevel };
   } catch (e: any) {
-    return { ok: false, channel_id: channel.id, name: channel.name, error_message: e.message };
+    return { ok: false, channel_id: channel.id, name: channel.name, error_message: e.message, app_level: appLevel };
   }
 }
 
@@ -228,6 +266,7 @@ async function subscribeChannel(channel: any) {
 // Pass { channel_id } for a single channel, or { all: true } to fix every channel that has a WABA.
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  const origin = req.nextUrl.origin;
 
   if (body.all) {
     const { data: channels, error } = await adminSupabase
@@ -242,7 +281,7 @@ export async function POST(req: NextRequest) {
 
     const results = [];
     for (const channel of channels || []) {
-      results.push(await subscribeChannel(channel));
+      results.push(await subscribeChannel(channel, origin));
     }
     return NextResponse.json({ results });
   }
@@ -262,7 +301,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Channel not found: ${channelErr?.message}` }, { status: 404 });
   }
 
-  const result = await subscribeChannel(channel);
+  const result = await subscribeChannel(channel, origin);
   if (!result.ok) {
     return NextResponse.json(result, { status: 400 });
   }
