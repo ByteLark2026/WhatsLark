@@ -96,6 +96,8 @@ export async function GET(req: NextRequest) {
           ok: apps.length > 0 && hasMessages,
           subscribed_app_count: apps.length,
           fields,
+          business_account_id: channel.business_account_id,
+          raw: apps.length === 0 ? json : undefined,
           fix: apps.length === 0
             ? 'No app subscribed to this WABA. Click "Subscribe webhook" to fix.'
             : !hasMessages

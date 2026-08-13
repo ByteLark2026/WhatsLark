@@ -725,6 +725,14 @@ export default function ChannelsPage() {
                         {diagResult.checks.webhook_subscription.fields && (
                           <p>Current fields: {diagResult.checks.webhook_subscription.fields.join(', ') || '(none)'}</p>
                         )}
+                        {diagResult.checks.webhook_subscription.business_account_id && (
+                          <p>WABA ID checked: <code>{diagResult.checks.webhook_subscription.business_account_id}</code></p>
+                        )}
+                        {diagResult.checks.webhook_subscription.raw && (
+                          <pre className="text-[10px] bg-white/50 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+                            {JSON.stringify(diagResult.checks.webhook_subscription.raw, null, 2)}
+                          </pre>
+                        )}
                         {diagResult.checks.webhook_subscription.error_message && (
                           <p><strong>[{diagResult.checks.webhook_subscription.error_code}]</strong> {diagResult.checks.webhook_subscription.error_message}</p>
                         )}
