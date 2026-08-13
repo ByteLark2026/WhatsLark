@@ -747,6 +747,23 @@ export default function ChannelsPage() {
                   </div>
                 )}
 
+                {/* Webhook signature protection (app_secret) check */}
+                {diagResult.checks?.signature_protection && (
+                  <div className={`rounded-md p-3 border ${diagResult.checks.signature_protection.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <div className="flex items-center gap-2 font-medium mb-1">
+                      {diagResult.checks.signature_protection.ok
+                        ? <CheckCircle className="w-4 h-4 text-green-600" />
+                        : <XCircle className="w-4 h-4 text-red-600" />}
+                      Webhook Signature Protection (App Secret)
+                    </div>
+                    {diagResult.checks.signature_protection.ok ? (
+                      <p className="text-xs text-green-800">App Secret is set — inbound webhooks are verified.</p>
+                    ) : (
+                      <p className="text-xs text-red-800 italic">{diagResult.checks.signature_protection.fix}</p>
+                    )}
+                  </div>
+                )}
+
                 {/* Webhook subscription check */}
                 {diagResult.checks?.webhook_subscription && (
                   <div className={`rounded-md p-3 border ${diagResult.checks.webhook_subscription.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>

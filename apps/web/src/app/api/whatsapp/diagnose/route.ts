@@ -42,6 +42,17 @@ export async function GET(req: NextRequest) {
 
   const checks: Record<string, any> = {};
 
+  // 2b. Webhook signature protection — inbound webhooks are rejected (401) if
+  // this channel has no app_secret set, since HMAC verification is otherwise
+  // impossible. Surfaced here so a missing secret is visible before it silently
+  // stops delivery/status webhooks from arriving.
+  checks.signature_protection = channel.app_secret
+    ? { ok: true }
+    : {
+        ok: false,
+        fix: 'No App Secret set on this channel. Inbound webhooks (messages, delivery/read status) are being rejected. Edit the channel and paste the App Secret from Meta App → Settings → Basic.',
+      };
+
   // 3. Verify access token via Meta phone number info endpoint
   try {
     const res = await fetch(

@@ -42,8 +42,10 @@ export class WhatsAppWebhookService {
 
   /**
    * Verifies Meta's X-Hub-Signature-256 HMAC against the channel's app_secret.
-   * Channels created before app_secret existed have none set — for those we log a
-   * loud warning but allow the request through, rather than breaking existing integrations.
+   * Rejects if app_secret isn't configured — an unsigned webhook is otherwise
+   * forgeable by anyone who knows the channel's phone_number_id. Use the
+   * Diagnose panel on the Channels page to find channels missing app_secret
+   * before they start silently dropping inbound traffic.
    */
   async verifySignature(body: any, rawBody: Buffer | undefined, signatureHeader: string | undefined): Promise<boolean> {
     const phoneNumberId: string | undefined = body?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
@@ -51,8 +53,8 @@ export class WhatsAppWebhookService {
 
     const channel = await this.whatsapp.getChannelByPhoneNumberId(phoneNumberId);
     if (!channel?.app_secret) {
-      this.logger.warn(`Webhook signature not verified: no app_secret configured for phone_number_id ${phoneNumberId}`);
-      return true;
+      this.logger.error(`Webhook rejected: no app_secret configured for phone_number_id ${phoneNumberId} — add one in Channels > Edit to receive messages.`);
+      return false;
     }
 
     if (!signatureHeader || !rawBody) {

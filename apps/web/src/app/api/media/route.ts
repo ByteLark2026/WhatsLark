@@ -7,6 +7,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
 import { decryptToken } from '@/lib/token-crypto';
 
 const GRAPH_VERSION = process.env.WHATSAPP_API_VERSION || 'v21.0';
@@ -16,6 +17,34 @@ const adminSupabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+// Same cookie-reading pattern as middleware.ts — <img>/<video>/<audio> tags
+// can't attach an Authorization header, but the Supabase session cookie set
+// by createBrowserClient rides along automatically on same-origin requests.
+async function getAuthedCompanyId(req: NextRequest): Promise<string | null> {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get: (name: string) => req.cookies.get(name)?.value,
+        set: () => {},
+        remove: () => {},
+      },
+    },
+  );
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await adminSupabase
+    .from('company_users')
+    .select('company_id')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+  return data?.company_id || null;
+}
+
 export async function GET(req: NextRequest) {
   const mediaId = req.nextUrl.searchParams.get('id');
   const channelId = req.nextUrl.searchParams.get('channel_id');
@@ -24,11 +53,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'id and channel_id required' }, { status: 400 });
   }
 
-  // Get channel access token
+  const companyId = await getAuthedCompanyId(req);
+  if (!companyId) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+
+  // Get channel access token — scoped to the caller's own company so cross-tenant
+  // channel_id guessing can't be used to pull another company's private media.
   const { data: channel } = await adminSupabase
     .from('whatsapp_channels')
     .select('access_token')
     .eq('id', channelId)
+    .eq('company_id', companyId)
     .single();
 
   if (!channel?.access_token) {

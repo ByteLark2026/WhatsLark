@@ -107,6 +107,7 @@ export class WhatsAppService {
       business_account_id: dto.waba_id,
       access_token: accessToken,
       meta_app_id: appId,
+      app_secret: appSecret,
     });
   }
 

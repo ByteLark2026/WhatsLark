@@ -10,8 +10,8 @@ const adminSupabase = createClient(
 );
 
 /** Verifies Meta's X-Hub-Signature-256 against the channel's app_secret.
- *  Channels without one configured yet are allowed through with a warning (see apps/api's
- *  equivalent check for the same backward-compatibility rationale). */
+ *  Rejects if app_secret isn't configured — an unsigned webhook is otherwise
+ *  forgeable by anyone who knows the channel's phone_number_id. */
 async function verifySignature(rawBody: string, signatureHeader: string | null): Promise<boolean> {
   let phoneNumberId: string | undefined;
   try {
@@ -28,8 +28,8 @@ async function verifySignature(rawBody: string, signatureHeader: string | null):
     .maybeSingle();
 
   if (!channel?.app_secret) {
-    console.warn(`[webhook] signature not verified: no app_secret configured for phone_number_id ${phoneNumberId}`);
-    return true;
+    console.error(`[webhook] rejected: no app_secret configured for phone_number_id ${phoneNumberId} — add one in Channels > Edit to receive messages.`);
+    return false;
   }
 
   if (!signatureHeader) {
