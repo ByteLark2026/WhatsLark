@@ -83,9 +83,14 @@ export async function GET(req: NextRequest) {
       const json = await res.json();
       if (res.ok) {
         const apps: any[] = json.data || [];
+        // A WABA is rarely subscribed to more than one app; match by meta_app_id when we
+        // have one, but fall back to "any subscribed app has messages" rather than showing
+        // a false negative when the stored app id doesn't exactly match Meta's response.
         const appId = channel.meta_app_id;
-        const ourApp = appId ? apps.find((a) => a.whatsapp_business_api_data?.id === appId) : apps[0];
-        const fields: string[] = ourApp?.subscribed_fields || [];
+        const matchedApp = appId ? apps.find((a) => a.whatsapp_business_api_data?.id === appId) : undefined;
+        const fields: string[] = matchedApp
+          ? matchedApp.subscribed_fields || []
+          : Array.from(new Set(apps.flatMap((a) => a.subscribed_fields || [])));
         const hasMessages = fields.includes('messages');
         checks.webhook_subscription = {
           ok: apps.length > 0 && hasMessages,
