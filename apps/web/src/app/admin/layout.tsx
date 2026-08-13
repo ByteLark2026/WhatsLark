@@ -32,6 +32,7 @@ const adminNav = [
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/admin/notifications', label: 'Notifications', icon: Bell },
   { href: '/admin/subscription-plans', label: 'Subscription Plans', icon: CreditCard },
+  { href: '/admin/billing-plans', label: 'Billing Plans (Razorpay)', icon: CreditCard },
   { href: '/admin/subscriptions', label: 'Subscriptions Data', icon: Layers },
   { href: '/admin/transactions', label: 'Transactions Logs', icon: Receipt },
   { href: '/admin/message-logs', label: 'Message Logs', icon: MessageSquare },

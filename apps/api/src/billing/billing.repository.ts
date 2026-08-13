@@ -255,6 +255,70 @@ export class BillingRepository {
     return count || 0;
   }
 
+  // ---- Super-admin plan/price management ----
+
+  async listAllPlansWithPrices() {
+    const { data: plans, error } = await this.db()
+      .from('billing_plans')
+      .select('*')
+      .order('display_order');
+    if (error) throw new BadRequestException(error.message);
+    if (!plans?.length) return [];
+
+    const { data: prices, error: priceErr } = await this.db()
+      .from('billing_prices')
+      .select('*')
+      .in('plan_id', plans.map((p) => p.id))
+      .order('billing_interval');
+    if (priceErr) throw new BadRequestException(priceErr.message);
+
+    return plans.map((plan) => ({ ...plan, prices: (prices || []).filter((pr) => pr.plan_id === plan.id) }));
+  }
+
+  async createPlan(dto: { code: string; name: string; description?: string; features: Record<string, any>; active?: boolean; display_order?: number }) {
+    const { data, error } = await this.db().from('billing_plans').insert(dto).select().single();
+    if (error) throw new BadRequestException(error.message);
+    return data;
+  }
+
+  async updatePlan(id: string, dto: Record<string, any>) {
+    const { data, error } = await this.db().from('billing_plans').update(dto).eq('id', id).select().single();
+    if (error) throw new BadRequestException(error.message);
+    return data;
+  }
+
+  async deletePlan(id: string) {
+    const { error } = await this.db().from('billing_plans').delete().eq('id', id);
+    if (error) throw new BadRequestException(error.message);
+    return { success: true };
+  }
+
+  async createPrice(dto: {
+    plan_id: string;
+    provider?: string;
+    provider_plan_id: string;
+    billing_interval: string;
+    currency?: string;
+    amount_minor: number;
+    active?: boolean;
+  }) {
+    const { data, error } = await this.db().from('billing_prices').insert(dto).select().single();
+    if (error) throw new BadRequestException(error.message);
+    return data;
+  }
+
+  async updatePrice(id: string, dto: Record<string, any>) {
+    const { data, error } = await this.db().from('billing_prices').update(dto).eq('id', id).select().single();
+    if (error) throw new BadRequestException(error.message);
+    return data;
+  }
+
+  async deletePrice(id: string) {
+    const { error } = await this.db().from('billing_prices').delete().eq('id', id);
+    if (error) throw new BadRequestException(error.message);
+    return { success: true };
+  }
+
   async countContacts(companyId: string) {
     const { count } = await this.db()
       .from('contacts')

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BillingController } from './billing.controller';
+import { BillingAdminController } from './billing-admin.controller';
 import { BillingService } from './billing.service';
 import { BillingRepository } from './billing.repository';
 import { EntitlementsService } from './entitlements.service';
@@ -9,7 +10,7 @@ import { RazorpayWebhookController } from './webhooks/razorpay-webhook.controlle
 import { RazorpayWebhookService } from './webhooks/razorpay-webhook.service';
 
 @Module({
-  controllers: [BillingController, RazorpayWebhookController],
+  controllers: [BillingController, BillingAdminController, RazorpayWebhookController],
   providers: [
     BillingService,
     BillingRepository,
