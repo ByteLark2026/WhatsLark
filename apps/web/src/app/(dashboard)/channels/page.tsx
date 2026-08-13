@@ -764,6 +764,34 @@ export default function ChannelsPage() {
                   </div>
                 )}
 
+                {/* App-level webhook field config */}
+                {diagResult.checks?.app_level_config && (
+                  <div className={`rounded-md p-3 border ${diagResult.checks.app_level_config.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <div className="flex items-center gap-2 font-medium mb-1">
+                      {diagResult.checks.app_level_config.ok
+                        ? <CheckCircle className="w-4 h-4 text-green-600" />
+                        : <XCircle className="w-4 h-4 text-red-600" />}
+                      App-level Webhook Config (meta_app_id / app_secret)
+                    </div>
+                    <div className="text-xs space-y-1">
+                      {diagResult.checks.app_level_config.skipped && (
+                        <p className="text-red-800 italic">{diagResult.checks.app_level_config.fix}</p>
+                      )}
+                      {diagResult.checks.app_level_config.all_subscriptions && (
+                        <pre className="text-[10px] bg-white/50 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+                          {JSON.stringify(diagResult.checks.app_level_config.all_subscriptions, null, 2)}
+                        </pre>
+                      )}
+                      {diagResult.checks.app_level_config.error_message && (
+                        <p className="text-red-800"><strong>[{diagResult.checks.app_level_config.error_code}]</strong> {diagResult.checks.app_level_config.error_message}</p>
+                      )}
+                      {diagResult.checks.app_level_config.fix && !diagResult.checks.app_level_config.skipped && (
+                        <p className="text-red-800 italic">{diagResult.checks.app_level_config.fix}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Schema check */}
                 {diagResult.checks?.schema_channel_id && (
                   <div className={`rounded-md p-3 border ${diagResult.checks.schema_channel_id.ok ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>

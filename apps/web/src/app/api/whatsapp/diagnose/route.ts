@@ -117,6 +117,47 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // 3c. Check app-level webhook field config directly (separate from the WABA-attach check above).
+  // Tells us whether meta_app_id/app_secret are even present, and if not, whether the
+  // app-level POST /{app-id}/subscriptions has ever succeeded and with which fields.
+  if (channel.meta_app_id && channel.app_secret) {
+    try {
+      const appAccessToken = `${channel.meta_app_id}|${channel.app_secret}`;
+      const res = await fetch(
+        `https://graph.facebook.com/${API_VER}/${channel.meta_app_id}/subscriptions?access_token=${encodeURIComponent(appAccessToken)}`,
+      );
+      const json = await res.json();
+      if (res.ok) {
+        const subs: any[] = json.data || [];
+        const wabaSub = subs.find((s) => s.object === 'whatsapp_business_account');
+        checks.app_level_config = {
+          ok: !!wabaSub?.fields?.some((f: any) => f.name === 'messages'),
+          all_subscriptions: subs.map((s) => ({ object: s.object, callback_url: s.callback_url, fields: (s.fields || []).map((f: any) => f.name) })),
+          fix: !wabaSub ? 'App has no "whatsapp_business_account" subscription at all — app-level webhook was never configured.' : null,
+        };
+      } else {
+        checks.app_level_config = {
+          ok: false,
+          error_message: json.error?.message,
+          error_code: json.error?.code,
+          fix: json.error?.code === 190
+            ? 'app_secret is wrong/invalid for this meta_app_id — app access token rejected.'
+            : 'Could not read app-level subscription config.',
+        };
+      }
+    } catch (e: any) {
+      checks.app_level_config = { ok: false, error_message: e.message };
+    }
+  } else {
+    checks.app_level_config = {
+      ok: false,
+      skipped: true,
+      fix: !channel.meta_app_id
+        ? 'No meta_app_id stored on this channel — app-level webhook subscribe cannot run.'
+        : 'No app_secret stored on this channel — app-level webhook subscribe cannot run.',
+    };
+  }
+
   // 4. Check schema — does messages.channel_id column exist?
   try {
     const { error: schemaErr } = await adminSupabase
