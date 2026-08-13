@@ -197,11 +197,51 @@ export async function GET(req: NextRequest) {
   });
 }
 
+async function subscribeChannel(channel: any) {
+  if (!channel.business_account_id) {
+    return { ok: false, channel_id: channel.id, name: channel.name, error_message: 'No business_account_id set.' };
+  }
+  const accessToken = decryptToken(channel.access_token);
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${API_VER}/${channel.business_account_id}/subscribed_apps`,
+      { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const json = await res.json();
+    if (!res.ok) {
+      return { ok: false, channel_id: channel.id, name: channel.name, error_message: json.error?.message, error_code: json.error?.code };
+    }
+    return { ok: true, channel_id: channel.id, name: channel.name, success: json.success };
+  } catch (e: any) {
+    return { ok: false, channel_id: channel.id, name: channel.name, error_message: e.message };
+  }
+}
+
 // Subscribe our app to a WABA's webhooks (fixes "messages" field not subscribed).
+// Pass { channel_id } for a single channel, or { all: true } to fix every channel that has a WABA.
 export async function POST(req: NextRequest) {
-  const { channel_id: channelId } = await req.json();
+  const body = await req.json();
+
+  if (body.all) {
+    const { data: channels, error } = await adminSupabase
+      .from('whatsapp_channels')
+      .select('*')
+      .not('business_account_id', 'is', null);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const results = [];
+    for (const channel of channels || []) {
+      results.push(await subscribeChannel(channel));
+    }
+    return NextResponse.json({ results });
+  }
+
+  const channelId = body.channel_id;
   if (!channelId) {
-    return NextResponse.json({ error: 'channel_id required' }, { status: 400 });
+    return NextResponse.json({ error: 'channel_id or all required' }, { status: 400 });
   }
 
   const { data: channel, error: channelErr } = await adminSupabase
@@ -213,24 +253,10 @@ export async function POST(req: NextRequest) {
   if (channelErr || !channel) {
     return NextResponse.json({ error: `Channel not found: ${channelErr?.message}` }, { status: 404 });
   }
-  if (!channel.business_account_id) {
-    return NextResponse.json({ error: 'Channel has no business_account_id set.' }, { status: 400 });
+
+  const result = await subscribeChannel(channel);
+  if (!result.ok) {
+    return NextResponse.json(result, { status: 400 });
   }
-  channel.access_token = decryptToken(channel.access_token);
-
-  const res = await fetch(
-    `https://graph.facebook.com/${API_VER}/${channel.business_account_id}/subscribed_apps`,
-    { method: 'POST', headers: { Authorization: `Bearer ${channel.access_token}` } },
-  );
-  const json = await res.json();
-
-  if (!res.ok) {
-    return NextResponse.json({
-      ok: false,
-      error_message: json.error?.message,
-      error_code: json.error?.code,
-    }, { status: 400 });
-  }
-
-  return NextResponse.json({ ok: true, success: json.success });
+  return NextResponse.json(result);
 }

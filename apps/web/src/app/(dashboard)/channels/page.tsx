@@ -348,6 +348,35 @@ export default function ChannelsPage() {
     }
   };
 
+  const [subscribingAll, setSubscribingAll] = useState(false);
+
+  const handleSubscribeAllWebhooks = async () => {
+    setSubscribingAll(true);
+    try {
+      const res = await fetch('/api/whatsapp/diagnose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      });
+      const json = await res.json();
+      const results: any[] = json.results || [];
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length === 0) {
+        toast({ title: 'All channels subscribed', description: `${results.length} channel(s) confirmed subscribed to webhooks.` });
+      } else {
+        toast({
+          title: `${results.length - failed.length}/${results.length} subscribed`,
+          description: failed.map((f) => `${f.name}: ${f.error_message}`).join('; '),
+          variant: 'destructive',
+        });
+      }
+    } catch (err: any) {
+      toast({ title: 'Subscribe all failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setSubscribingAll(false);
+    }
+  };
+
   const copy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: `${label} copied` });
@@ -375,9 +404,15 @@ export default function ChannelsPage() {
         <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm font-semibold text-blue-900">Meta Webhook Configuration</p>
-            <Button variant="outline" size="sm" className="border-blue-300 text-blue-800 hover:bg-blue-100" onClick={handleTestWebhook}>
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Test webhook
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="border-blue-300 text-blue-800 hover:bg-blue-100" onClick={handleTestWebhook}>
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Test webhook
+              </Button>
+              <Button variant="outline" size="sm" className="border-blue-300 text-blue-800 hover:bg-blue-100" disabled={subscribingAll} onClick={handleSubscribeAllWebhooks}>
+                {subscribingAll ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                Subscribe all channels
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-2">
