@@ -1,9 +1,13 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase.service';
+import { EntitlementsService } from '../billing/entitlements.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly entitlements: EntitlementsService,
+  ) {}
 
   async listTeam(companyId: string) {
     const { data, error } = await this.supabase.getAdminClient()
@@ -16,6 +20,8 @@ export class UsersService {
   }
 
   async invite(companyId: string, dto: { email: string; full_name: string; role: string }) {
+    await this.entitlements.canInviteTeamMember(companyId);
+
     // Create auth user
     const { data: authData, error: authError } = await this.supabase.getAdminClient()
       .auth.admin.createUser({

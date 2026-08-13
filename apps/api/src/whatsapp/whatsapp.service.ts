@@ -3,6 +3,7 @@ import axios from 'axios';
 import { SupabaseService } from '../common/supabase.service';
 import { encryptToken, decryptToken } from '../common/token-crypto.util';
 import { resolveCompanyId } from '../common/company-cache.util';
+import { EntitlementsService } from '../billing/entitlements.service';
 
 const CHANNEL_SELECT =
   'id, name, phone_number, phone_number_id, business_account_id, webhook_verify_token, meta_app_id, is_active, created_at, updated_at';
@@ -12,7 +13,10 @@ export class WhatsAppService {
   private readonly apiVersion = process.env.WHATSAPP_API_VERSION || 'v21.0';
   private readonly baseUrl = process.env.WHATSAPP_API_URL || 'https://graph.facebook.com';
 
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly entitlements: EntitlementsService,
+  ) {}
 
   async getCompanyId(userId: string): Promise<string> {
     const companyId = await resolveCompanyId(this.supabase.getAdminClient(), userId);
@@ -119,6 +123,7 @@ export class WhatsAppService {
     },
   ) {
     const companyId = await this.getCompanyId(userId);
+    await this.entitlements.canCreateChannel(companyId);
 
     // Validate credentials against Meta Graph API before storing
     try {

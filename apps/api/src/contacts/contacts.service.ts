@@ -1,9 +1,13 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase.service';
+import { EntitlementsService } from '../billing/entitlements.service';
 
 @Injectable()
 export class ContactsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly entitlements: EntitlementsService,
+  ) {}
 
   async list(companyId: string, opts: { search?: string; tag?: string; page?: number; limit?: number } = {}) {
     const { search, tag } = opts;
@@ -48,6 +52,8 @@ export class ContactsService {
     email?: string;
     custom_fields?: Record<string, string>;
   }) {
+    await this.entitlements.canCreateContact(companyId);
+
     const { data, error } = await this.supabase.getAdminClient()
       .from('contacts')
       .insert({ company_id: companyId, ...dto })

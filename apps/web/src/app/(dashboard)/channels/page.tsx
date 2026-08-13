@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 import type { WhatsAppChannel } from '@whatslark/shared';
 import { useToast } from '@/hooks/use-toast';
+import { isPlanLimitError, planLimitMessage } from '@/lib/plan-limit';
 
 const BLANK = {
   name: '',
@@ -263,7 +264,11 @@ export default function ChannelsPage() {
       }
       setShowDialog(false);
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      if (isPlanLimitError(err)) {
+        toast({ title: 'Plan limit reached', description: planLimitMessage(err), variant: 'destructive' });
+      } else {
+        toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      }
     } finally {
       setSaving(false);
     }

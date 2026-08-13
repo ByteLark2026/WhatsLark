@@ -6,9 +6,10 @@ import { WhatsAppWebhookController } from './webhook.controller';
 import { WhatsAppWebhookService } from './webhook.service';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ContactsModule } from '../contacts/contacts.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
-  imports: [HttpModule, ConversationsModule, ContactsModule],
+  imports: [HttpModule, ConversationsModule, ContactsModule, BillingModule],
   controllers: [WhatsAppController, WhatsAppWebhookController],
   providers: [WhatsAppService, WhatsAppWebhookService],
   exports: [WhatsAppService],

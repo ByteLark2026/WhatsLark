@@ -27,7 +27,12 @@ class ApiClient {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: res.statusText }));
-      throw new Error(err.message || 'Request failed');
+      const error = new Error(err.message || 'Request failed');
+      // Nest exceptions thrown with an object payload (e.g. PLAN_LIMIT_REACHED)
+      // serialize as that object directly, with no top-level `message` — attach
+      // the raw body so callers can read structured fields like `code`/`feature`.
+      Object.assign(error, err);
+      throw error;
     }
 
     const text = await res.text();

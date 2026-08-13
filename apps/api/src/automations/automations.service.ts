@@ -1,9 +1,13 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase.service';
+import { EntitlementsService } from '../billing/entitlements.service';
 
 @Injectable()
 export class AutomationsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly entitlements: EntitlementsService,
+  ) {}
 
   async list(companyId: string) {
     const { data, error } = await this.supabase.getAdminClient()
@@ -22,6 +26,8 @@ export class AutomationsService {
     actions: any[];
     is_active?: boolean;
   }) {
+    await this.entitlements.canCreateAutomation(companyId);
+
     const { data, error } = await this.supabase.getAdminClient()
       .from('automation_rules')
       .insert({ company_id: companyId, ...dto })

@@ -2,10 +2,14 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import OpenAI from 'openai';
 import { SupabaseService } from '../common/supabase.service';
 import { resolveAiProviderKey } from '../common/ai-key.util';
+import { EntitlementsService } from '../billing/entitlements.service';
 
 @Injectable()
 export class AiService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly entitlements: EntitlementsService,
+  ) {}
 
   /** Built fresh per call so an admin-added/switched key in ai_provider_keys takes
    *  effect immediately, without redeploying. */
@@ -45,6 +49,8 @@ export class AiService {
   async suggestReply(companyId: string, conversationId: string): Promise<string> {
     const settings = await this.getSettings(companyId);
     if (!settings.is_enabled) return '';
+
+    await this.entitlements.consumeAiCredits(companyId, 1);
 
     // Get last N messages for context — scoped to the caller's own company so a
     // guessed/leaked conversation_id from another tenant can't be used to exfiltrate it.

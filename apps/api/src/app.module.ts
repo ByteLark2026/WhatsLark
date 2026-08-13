@@ -31,6 +31,7 @@ import { QuotationsModule } from './quotations/quotations.module';
 import { WidgetModule } from './widget/widget.module';
 import { VoiceModule } from './voice/voice.module';
 import { AiPosterModule } from './ai-poster/ai-poster.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   controllers: [AppController],
@@ -79,6 +80,7 @@ import { AiPosterModule } from './ai-poster/ai-poster.module';
     WidgetModule,
     VoiceModule,
     AiPosterModule,
+    BillingModule,
   ],
 })
 export class AppModule {}

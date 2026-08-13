@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import {
   Save, Loader2, Building2, Clock, MessageSquare,
-  Plus, Trash2, CheckCircle, XCircle, Copy, Eye, EyeOff, ExternalLink, Webhook, Zap, ChevronRight,
+  Plus, Trash2, CheckCircle, XCircle, Copy, Eye, EyeOff, ExternalLink, Webhook, Zap, ChevronRight, CreditCard,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -370,6 +370,7 @@ export default function SettingsPage() {
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">More settings</p>
           <div className="grid sm:grid-cols-2 gap-3">
             {[
+              { href: '/settings/billing', label: 'Billing', desc: 'Subscription plan, usage & payment history', icon: CreditCard },
               { href: '/settings/quick-replies', label: 'Quick Replies', desc: 'Saved message shortcuts for inbox', icon: Zap },
               { href: '/settings/integrations', label: 'Integrations', desc: 'WooCommerce & Shopify stores', icon: ExternalLink },
             ].map((item) => (
