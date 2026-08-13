@@ -242,9 +242,15 @@ export class WhatsAppWebhookService {
     const waMessageId: string = status.id;
     const newStatus: string = status.status; // sent | delivered | read | failed
 
+    const messageUpdate: any = { status: newStatus };
+    if (newStatus === 'failed') {
+      const err = status.errors?.[0];
+      messageUpdate.error_message = err ? `${err.title || err.message}${err.code ? ` (${err.code})` : ''}` : null;
+    }
+
     await this.supabase.getAdminClient()
       .from('messages')
-      .update({ status: newStatus })
+      .update(messageUpdate)
       .eq('wa_message_id', waMessageId);
 
     // Update campaign recipient if applicable

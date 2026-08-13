@@ -284,7 +284,13 @@ export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
                   <span className={cn('text-[10px]', isOut ? 'text-white/70' : 'text-muted-foreground')}>
                     {formatRelativeTime(msg.created_at)}
                   </span>
-                  {isOut && !isNoteMsg && statusIcon[msg.status]}
+                  {isOut && !isNoteMsg && (
+                    msg.status === 'failed' && msg.error_message ? (
+                      <span title={msg.error_message}>{statusIcon[msg.status]}</span>
+                    ) : (
+                      statusIcon[msg.status]
+                    )
+                  )}
                 </div>
               </div>
             </div>

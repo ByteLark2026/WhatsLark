@@ -357,9 +357,14 @@ async function handleStatusUpdate(status: any) {
   if (!validStatuses.includes(rawStatus)) return;
 
   // Update message row
+  const messageUpdate: Record<string, any> = { status: rawStatus };
+  if (rawStatus === 'failed') {
+    const err = status.errors?.[0];
+    messageUpdate.error_message = err ? `${err.title || err.message}${err.code ? ` (${err.code})` : ''}` : null;
+  }
   await adminSupabase
     .from('messages')
-    .update({ status: rawStatus })
+    .update(messageUpdate)
     .eq('wa_message_id', waMessageId);
 
   // Update campaign recipient tracking if applicable

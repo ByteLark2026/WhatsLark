@@ -240,6 +240,7 @@ export interface Message extends BaseEntity {
   media_url?: string;
   media_type?: string;
   status: MessageStatus;
+  error_message?: string;
   wa_message_id?: string;
   sender_id?: string;
   is_note: boolean;
