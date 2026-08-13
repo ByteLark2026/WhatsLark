@@ -12,65 +12,82 @@ const features = [
   { icon: Shield, title: 'Multi-tenant & Secure', desc: 'Each workspace is isolated with row-level security. Enterprise-ready from day one.' },
 ];
 
-// Fallback shown only if the API is unreachable — the real source of truth is
-// the subscription_plans table, managed in Admin > Subscription Plans.
+// Fallback shown only if the billing API is unreachable — the real source of
+// truth is billing_plans/billing_prices, managed in Admin > Billing Plans
+// (Razorpay) and shown identically on /pricing.
 const FALLBACK_PLANS = [
   {
-    name: 'Starter', price: '$29', period: '/month',
-    features: ['2 agents', '1 WhatsApp number', '1,000 contacts', '5 campaigns/month', 'Basic automations'],
-    cta: 'Start free trial', highlighted: false,
+    name: 'Starter', price: '₹999', period: '/month',
+    features: ['1 WhatsApp channel', '2 team members', '5 active automations', '2,000 contacts', '200 AI credits/month'],
+    cta: 'Choose plan', highlighted: false,
   },
   {
-    name: 'Growth', price: '$79', period: '/month',
-    features: ['10 agents', '3 WhatsApp numbers', '10,000 contacts', 'Unlimited campaigns', 'AI assistant', 'Analytics'],
-    cta: 'Start free trial', highlighted: true,
+    name: 'Professional', price: '₹2,499', period: '/month',
+    features: ['3 WhatsApp channels', '10 team members', '25 active automations', '10,000 contacts', 'API access'],
+    cta: 'Choose plan', highlighted: true,
   },
   {
-    name: 'Enterprise', price: 'Custom', period: '',
-    features: ['Unlimited agents', 'Unlimited numbers', 'Unlimited contacts', 'Dedicated support', 'SLA', 'Custom integrations'],
-    cta: 'Contact sales', highlighted: false,
+    name: 'Business', price: '₹5,999', period: '/month',
+    features: ['10 WhatsApp channels', '50 team members', '100 active automations', '50,000 contacts', 'API access'],
+    cta: 'Choose plan', highlighted: false,
   },
 ];
 
-interface ApiPlan {
+interface ApiPrice {
   id: string;
-  name: string;
-  price_monthly: number;
+  billing_interval: 'monthly' | 'yearly';
   currency: string;
-  max_users: number | null;
-  max_channels: number | null;
-  max_contacts: number | null;
-  max_messages_per_month: number | null;
-  features: string[];
+  amount_minor: number;
 }
 
-function planLimitLines(p: ApiPlan): string[] {
-  const lines: string[] = [];
-  lines.push(p.max_users ? `${p.max_users} agent${p.max_users === 1 ? '' : 's'}` : 'Unlimited agents');
-  lines.push(p.max_channels ? `${p.max_channels} WhatsApp number${p.max_channels === 1 ? '' : 's'}` : 'Unlimited WhatsApp numbers');
-  lines.push(p.max_contacts ? `${p.max_contacts.toLocaleString()} contacts` : 'Unlimited contacts');
-  if (p.max_messages_per_month) lines.push(`${p.max_messages_per_month.toLocaleString()} messages/month`);
-  return [...lines, ...(Array.isArray(p.features) ? p.features : [])];
+interface ApiPlan {
+  id: string;
+  code: string;
+  name: string;
+  features: {
+    whatsapp_channels: number;
+    team_members: number;
+    automations: number;
+    contacts: number;
+    ai_credits_monthly: number;
+    api_access: boolean;
+  };
+  prices: ApiPrice[];
+}
+
+function planLimitLines(f: ApiPlan['features']): string[] {
+  const fmt = (n: number, label: string) => (n === -1 ? `Unlimited ${label}` : `${n.toLocaleString()} ${label}`);
+  return [
+    fmt(f.whatsapp_channels, 'WhatsApp channel' + (f.whatsapp_channels === 1 ? '' : 's')),
+    fmt(f.team_members, 'team members'),
+    fmt(f.automations, 'active automations'),
+    fmt(f.contacts, 'contacts'),
+    fmt(f.ai_credits_monthly, 'AI credits/month'),
+    ...(f.api_access ? ['API access'] : []),
+  ];
 }
 
 async function getPlans() {
   try {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-    const res = await fetch(`${apiUrl}/api/v1/plans`, { next: { revalidate: 300 } }); // 5 min cache
+    const res = await fetch(`${apiUrl}/api/v1/billing/plans`, { next: { revalidate: 300 } }); // 5 min cache
     if (!res.ok) return FALLBACK_PLANS;
     const data: ApiPlan[] = await res.json();
     if (!Array.isArray(data) || data.length === 0) return FALLBACK_PLANS;
 
-    return data.map((p, i) => ({
-      name: p.name,
-      price: p.price_monthly > 0
-        ? new Intl.NumberFormat('en', { style: 'currency', currency: p.currency || 'USD', maximumFractionDigits: 0 }).format(p.price_monthly)
-        : 'Custom',
-      period: p.price_monthly > 0 ? '/month' : '',
-      features: planLimitLines(p),
-      cta: p.price_monthly > 0 ? 'Start free trial' : 'Contact sales',
-      highlighted: data.length === 3 ? i === 1 : false,
-    }));
+    return data.map((p, i) => {
+      const monthly = p.prices.find((pr) => pr.billing_interval === 'monthly');
+      return {
+        name: p.name,
+        price: monthly
+          ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: monthly.currency, maximumFractionDigits: 0 }).format(monthly.amount_minor / 100)
+          : 'Contact sales',
+        period: monthly ? '/month' : '',
+        features: planLimitLines(p.features),
+        cta: monthly ? 'Choose plan' : 'Contact sales',
+        highlighted: data.length === 3 ? i === 1 : false,
+      };
+    });
   } catch {
     return FALLBACK_PLANS;
   }
@@ -156,7 +173,7 @@ export default async function HomePage() {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold mb-4">Simple, transparent pricing</h2>
-            <p className="text-lg text-muted-foreground">Start free. Scale as you grow.</p>
+            <p className="text-lg text-muted-foreground">Prices in INR. Meta/WhatsApp messaging charges are billed separately.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {plans.map((plan) => (
@@ -174,7 +191,7 @@ export default async function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/register">
+                <Link href="/pricing">
                   <Button className="w-full" variant={plan.highlighted ? 'default' : 'outline'}>{plan.cta}</Button>
                 </Link>
               </div>
