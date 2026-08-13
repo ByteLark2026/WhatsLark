@@ -73,6 +73,43 @@ export async function GET(req: NextRequest) {
     checks.token = { ok: false, error_message: e.message };
   }
 
+  // 3b. Check whether our app is subscribed to this WABA's webhooks, and which fields
+  if (checks.token?.ok && channel.business_account_id) {
+    try {
+      const res = await fetch(
+        `https://graph.facebook.com/${API_VER}/${channel.business_account_id}/subscribed_apps`,
+        { headers: { Authorization: `Bearer ${channel.access_token}` } },
+      );
+      const json = await res.json();
+      if (res.ok) {
+        const apps: any[] = json.data || [];
+        const appId = channel.meta_app_id;
+        const ourApp = appId ? apps.find((a) => a.whatsapp_business_api_data?.id === appId) : apps[0];
+        const fields: string[] = ourApp?.subscribed_fields || [];
+        const hasMessages = fields.includes('messages');
+        checks.webhook_subscription = {
+          ok: apps.length > 0 && hasMessages,
+          subscribed_app_count: apps.length,
+          fields,
+          fix: apps.length === 0
+            ? 'No app subscribed to this WABA. Click "Subscribe webhook" to fix.'
+            : !hasMessages
+            ? '"messages" field not subscribed — status/delivery updates will never arrive. Click "Subscribe webhook" to fix.'
+            : null,
+        };
+      } else {
+        checks.webhook_subscription = {
+          ok: false,
+          error_message: json.error?.message,
+          error_code: json.error?.code,
+          fix: 'Could not read subscription state — check business_account_id and token permissions (whatsapp_business_management scope).',
+        };
+      }
+    } catch (e: any) {
+      checks.webhook_subscription = { ok: false, error_message: e.message };
+    }
+  }
+
   // 4. Check schema — does messages.channel_id column exist?
   try {
     const { error: schemaErr } = await adminSupabase
@@ -158,4 +195,42 @@ export async function GET(req: NextRequest) {
     checks,
     api_version_used: API_VER,
   });
+}
+
+// Subscribe our app to a WABA's webhooks (fixes "messages" field not subscribed).
+export async function POST(req: NextRequest) {
+  const { channel_id: channelId } = await req.json();
+  if (!channelId) {
+    return NextResponse.json({ error: 'channel_id required' }, { status: 400 });
+  }
+
+  const { data: channel, error: channelErr } = await adminSupabase
+    .from('whatsapp_channels')
+    .select('*')
+    .eq('id', channelId)
+    .single();
+
+  if (channelErr || !channel) {
+    return NextResponse.json({ error: `Channel not found: ${channelErr?.message}` }, { status: 404 });
+  }
+  if (!channel.business_account_id) {
+    return NextResponse.json({ error: 'Channel has no business_account_id set.' }, { status: 400 });
+  }
+  channel.access_token = decryptToken(channel.access_token);
+
+  const res = await fetch(
+    `https://graph.facebook.com/${API_VER}/${channel.business_account_id}/subscribed_apps`,
+    { method: 'POST', headers: { Authorization: `Bearer ${channel.access_token}` } },
+  );
+  const json = await res.json();
+
+  if (!res.ok) {
+    return NextResponse.json({
+      ok: false,
+      error_message: json.error?.message,
+      error_code: json.error?.code,
+    }, { status: 400 });
+  }
+
+  return NextResponse.json({ ok: true, success: json.success });
 }

@@ -323,6 +323,31 @@ export default function ChannelsPage() {
     }
   };
 
+  const [subscribing, setSubscribing] = useState(false);
+
+  const handleSubscribeWebhook = async () => {
+    if (!diagTarget) return;
+    setSubscribing(true);
+    try {
+      const res = await fetch('/api/whatsapp/diagnose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: diagTarget.id }),
+      });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        toast({ title: 'Webhook subscribed', description: '"messages" field is now subscribed for this WABA.' });
+        await handleDiagnose(diagTarget);
+      } else {
+        toast({ title: 'Subscribe failed', description: json.error_message || 'Unknown error', variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Subscribe failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
   const copy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: `${label} copied` });
@@ -642,6 +667,37 @@ export default function ChannelsPage() {
                       <div className="text-xs text-red-800 space-y-1">
                         <p><strong>[{diagResult.checks.token.error_code}]</strong> {diagResult.checks.token.error_message}</p>
                         {diagResult.checks.token.fix && <p className="italic">{diagResult.checks.token.fix}</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Webhook subscription check */}
+                {diagResult.checks?.webhook_subscription && (
+                  <div className={`rounded-md p-3 border ${diagResult.checks.webhook_subscription.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <div className="flex items-center gap-2 font-medium mb-1">
+                      {diagResult.checks.webhook_subscription.ok
+                        ? <CheckCircle className="w-4 h-4 text-green-600" />
+                        : <XCircle className="w-4 h-4 text-red-600" />}
+                      Webhook Subscription
+                    </div>
+                    {diagResult.checks.webhook_subscription.ok ? (
+                      <p className="text-xs text-green-800">
+                        Subscribed. Fields: {diagResult.checks.webhook_subscription.fields.join(', ')}
+                      </p>
+                    ) : (
+                      <div className="text-xs text-red-800 space-y-1">
+                        {diagResult.checks.webhook_subscription.fields && (
+                          <p>Current fields: {diagResult.checks.webhook_subscription.fields.join(', ') || '(none)'}</p>
+                        )}
+                        {diagResult.checks.webhook_subscription.error_message && (
+                          <p><strong>[{diagResult.checks.webhook_subscription.error_code}]</strong> {diagResult.checks.webhook_subscription.error_message}</p>
+                        )}
+                        {diagResult.checks.webhook_subscription.fix && <p className="italic">{diagResult.checks.webhook_subscription.fix}</p>}
+                        <Button size="sm" variant="outline" className="mt-1 h-7 text-xs border-red-300" disabled={subscribing} onClick={handleSubscribeWebhook}>
+                          {subscribing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                          Subscribe webhook
+                        </Button>
                       </div>
                     )}
                   </div>
