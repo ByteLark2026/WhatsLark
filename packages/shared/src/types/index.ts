@@ -361,6 +361,7 @@ export interface AISettings extends BaseEntity {
   handover_keyword: string;
   system_prompt?: string;
   model: string;
+  tts_voice: string;
 }
 
 // ----- Subscription -----

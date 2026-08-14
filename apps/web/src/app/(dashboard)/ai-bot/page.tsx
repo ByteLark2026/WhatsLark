@@ -48,6 +48,7 @@ export default function AiBotPage() {
         handover_keyword: settings.handover_keyword,
         system_prompt: settings.system_prompt,
         model: settings.model,
+        tts_voice: settings.tts_voice,
       })
       .eq('company_id', company.id)
       .select()
@@ -159,6 +160,21 @@ export default function AiBotPage() {
                 onChange={(e) => setSettings((s) => s ? { ...s, system_prompt: e.target.value } : s)}
               />
               <p className="text-xs text-muted-foreground">This prompt defines the AI&apos;s personality and knowledge boundaries.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Voice reply voice</Label>
+              <Select value={settings?.tts_voice ?? 'alloy'} onValueChange={(v) => setSettings((s) => s ? { ...s, tts_voice: v } : s)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="alloy">Alloy</SelectItem>
+                  <SelectItem value="echo">Echo</SelectItem>
+                  <SelectItem value="fable">Fable</SelectItem>
+                  <SelectItem value="onyx">Onyx</SelectItem>
+                  <SelectItem value="nova">Nova</SelectItem>
+                  <SelectItem value="shimmer">Shimmer</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Used when replying to a customer&apos;s voice note with a voice note.</p>
             </div>
           </CardContent>
         </Card>

@@ -842,11 +842,11 @@ function parseAutomationDuration(str: string): number {
 }
 
 // ── Text-to-speech reply (voice note in, voice note back) ────────────────────
-async function synthesizeSpeech(text: string, apiKey: string): Promise<Buffer | null> {
+async function synthesizeSpeech(text: string, apiKey: string, voice: string): Promise<Buffer | null> {
   const res = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: text, response_format: 'mp3' }),
+    body: JSON.stringify({ model: 'tts-1', voice, input: text, response_format: 'mp3' }),
   });
   if (!res.ok) {
     console.error('[ai] TTS failed:', await res.text().catch(() => res.statusText));
@@ -891,7 +891,7 @@ async function executeAiAutoReply(ctx: {
   // Load AI settings
   const { data: settings } = await adminSupabase
     .from('ai_settings')
-    .select('is_enabled, auto_reply, handover_keyword, system_prompt, model')
+    .select('is_enabled, auto_reply, handover_keyword, system_prompt, model, tts_voice')
     .eq('company_id', ctx.companyId)
     .maybeSingle();
 
@@ -964,7 +964,7 @@ async function executeAiAutoReply(ctx: {
   let sentType: 'text' | 'audio' = 'text';
   if (ctx.wasVoiceNote) {
     try {
-      const speech = await synthesizeSpeech(replyText, openaiKey);
+      const speech = await synthesizeSpeech(replyText, openaiKey, settings.tts_voice || 'alloy');
       const mediaId = speech ? await uploadMetaMedia(ctx.accessToken, ctx.phoneNumberId, speech) : null;
       if (mediaId) {
         const audioRes = await fetch(`https://graph.facebook.com/${GRAPH_V}/${ctx.phoneNumberId}/messages`, {
