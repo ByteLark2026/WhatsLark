@@ -362,6 +362,7 @@ export interface AISettings extends BaseEntity {
   system_prompt?: string;
   model: string;
   tts_voice: string;
+  default_language: string;
 }
 
 // ----- Subscription -----

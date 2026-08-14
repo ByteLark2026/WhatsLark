@@ -891,7 +891,7 @@ async function executeAiAutoReply(ctx: {
   // Load AI settings
   const { data: settings } = await adminSupabase
     .from('ai_settings')
-    .select('is_enabled, auto_reply, handover_keyword, system_prompt, model, tts_voice')
+    .select('is_enabled, auto_reply, handover_keyword, system_prompt, model, tts_voice, default_language')
     .eq('company_id', ctx.companyId)
     .maybeSingle();
 
@@ -921,7 +921,10 @@ async function executeAiAutoReply(ctx: {
     .eq('is_active', true);
 
   const kbText = kb?.map((k: any) => `Q: ${k.question}\nA: ${k.answer}`).join('\n\n') || '';
-  const systemPrompt = `${settings.system_prompt || 'You are a helpful customer support assistant. Be friendly and concise.'}${kbText ? `\n\nKnowledge Base:\n${kbText}` : ''}`;
+  const languageInstruction = settings.default_language && settings.default_language !== 'auto'
+    ? `Always reply in ${settings.default_language}, regardless of the language the customer writes in.`
+    : 'Detect the language the customer is writing in and always reply in that same language.';
+  const systemPrompt = `${settings.system_prompt || 'You are a helpful customer support assistant. Be friendly and concise.'}\n\n${languageInstruction}${kbText ? `\n\nKnowledge Base:\n${kbText}` : ''}`;
 
   const messages = [
     { role: 'system', content: systemPrompt },

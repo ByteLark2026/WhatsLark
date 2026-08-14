@@ -49,6 +49,7 @@ export default function AiBotPage() {
         system_prompt: settings.system_prompt,
         model: settings.model,
         tts_voice: settings.tts_voice,
+        default_language: settings.default_language,
       })
       .eq('company_id', company.id)
       .select()
@@ -160,6 +161,23 @@ export default function AiBotPage() {
                 onChange={(e) => setSettings((s) => s ? { ...s, system_prompt: e.target.value } : s)}
               />
               <p className="text-xs text-muted-foreground">This prompt defines the AI&apos;s personality and knowledge boundaries.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Default language</Label>
+              <Select value={settings?.default_language ?? 'auto'} onValueChange={(v) => setSettings((s) => s ? { ...s, default_language: v } : s)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto-detect (match customer&apos;s language)</SelectItem>
+                  <SelectItem value="English">English</SelectItem>
+                  <SelectItem value="Arabic">Arabic</SelectItem>
+                  <SelectItem value="Hindi">Hindi</SelectItem>
+                  <SelectItem value="Urdu">Urdu</SelectItem>
+                  <SelectItem value="French">French</SelectItem>
+                  <SelectItem value="Spanish">Spanish</SelectItem>
+                  <SelectItem value="Tagalog">Tagalog</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Auto-detect replies in whatever language the customer writes in. Or force every reply into one language.</p>
             </div>
             <div className="space-y-2">
               <Label>Voice reply voice</Label>
