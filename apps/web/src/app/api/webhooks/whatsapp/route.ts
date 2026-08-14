@@ -874,6 +874,47 @@ async function uploadMetaMedia(accessToken: string, phoneNumberId: string, buffe
   return json.id || null;
 }
 
+async function callOpenAiChat(model: string, apiKey: string, messages: { role: string; content: string }[]): Promise<string | null> {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, messages, max_tokens: 400, temperature: 0.7 }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.error('[ai] OpenAI error:', err?.error?.message);
+    return null;
+  }
+  const json = await res.json();
+  return json.choices?.[0]?.message?.content?.trim() || null;
+}
+
+async function callGemini(model: string, apiKey: string, systemPrompt: string, history: { role: string; content: string }[]): Promise<string | null> {
+  const contents = history.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generationConfig: { maxOutputTokens: 400, temperature: 0.7 },
+      }),
+    },
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.error('[ai] Gemini error:', err?.error?.message);
+    return null;
+  }
+  const json = await res.json();
+  return json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+}
+
 // ── AI Auto-reply ─────────────────────────────────────────────────────────────
 async function executeAiAutoReply(ctx: {
   companyId: string;
@@ -885,9 +926,6 @@ async function executeAiAutoReply(ctx: {
   phoneNumberId: string;
   wasVoiceNote?: boolean;
 }) {
-  const openaiKey = await resolveAiProviderKey(adminSupabase);
-  if (!openaiKey) return; // not configured
-
   // Load AI settings
   const { data: settings } = await adminSupabase
     .from('ai_settings')
@@ -896,6 +934,12 @@ async function executeAiAutoReply(ctx: {
     .maybeSingle();
 
   if (!settings?.is_enabled || !settings?.auto_reply) return;
+
+  const isGemini = (settings.model || '').startsWith('gemini');
+  // Voice replies (TTS/Whisper) are OpenAI-only regardless of chat model — resolve both.
+  const openaiKey = await resolveAiProviderKey(adminSupabase, 'openai');
+  const chatKey = isGemini ? await resolveAiProviderKey(adminSupabase, 'gemini') : openaiKey;
+  if (!chatKey) return; // not configured
 
   // Handover keyword: stop bot if customer asked for human
   const handoverKw = (settings.handover_keyword || 'agent').toLowerCase();
@@ -934,26 +978,9 @@ async function executeAiAutoReply(ctx: {
     })),
   ];
 
-  // Call OpenAI chat completions
-  const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: settings.model || 'gpt-4o-mini',
-      messages,
-      max_tokens: 400,
-      temperature: 0.7,
-    }),
-  });
-
-  if (!aiRes.ok) {
-    const err = await aiRes.json().catch(() => ({}));
-    console.error('[ai] OpenAI error:', err?.error?.message);
-    return;
-  }
-
-  const aiJson = await aiRes.json();
-  const replyText: string = aiJson.choices?.[0]?.message?.content?.trim();
+  const replyText = isGemini
+    ? await callGemini(settings.model, chatKey, systemPrompt, messages.slice(1))
+    : await callOpenAiChat(settings.model || 'gpt-4o-mini', chatKey, messages);
   if (!replyText) return;
 
   console.log('[ai] sending auto-reply:', replyText.substring(0, 80));

@@ -92,7 +92,7 @@ export default function AdminAiKeysPage() {
         The most recently added <strong>active</strong> OpenAI key is used everywhere the app calls AI (auto-reply, flow generation, voice agent, transcription). If none are active, it falls back to the <code className="text-xs bg-muted px-1 py-0.5 rounded">OPENAI_API_KEY</code> environment variable.
       </p>
       <p className="text-xs text-amber-600 mb-4">
-        Gemini / Grok / Kimi / Claude / DeepSeek keys can be stored here but aren't wired to any feature yet — every AI call in the app is currently hardcoded to OpenAI. Ask to have a specific feature switched to one of these before relying on it.
+        Gemini is wired for AI Bot auto-reply — pick a Gemini model on a company's AI Bot page and it uses the active Gemini key here. Grok / Kimi / Claude / DeepSeek keys can be stored but aren't wired to any feature yet.
       </p>
 
       {loading ? (
