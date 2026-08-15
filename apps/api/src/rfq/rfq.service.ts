@@ -90,10 +90,12 @@ export class RfqService {
 
   /**
    * Builds a quotation draft from the RFQ's matched items. Price/cost/stock come from
-   * the tenant's connected ERP when one exists (ErpAdapterFactory), falling back to
-   * the local product_catalog otherwise — never the LLM, per the RFQ agent's core
-   * commercial-safety rule. Refuses if any item is still unmatched: a human must
-   * resolve every line first.
+   * the tenant's connected ERP when one exists (ErpAdapterFactory) — the ERP is the sole
+   * source of truth once connected, manual product_catalog data is never mixed in for
+   * that item, per the RFQ agent's core commercial-safety rule. Falls back to
+   * product_catalog only when no ERP connection is configured at all. Refuses if any
+   * item is still unmatched, or (with a connection) not found in the ERP: a human must
+   * resolve every line first rather than quote a guess.
    */
   async generateQuote(companyId: string, userId: string, rfqId: string) {
     const rfq = await this.get(companyId, rfqId);
@@ -112,18 +114,24 @@ export class RfqService {
     const lineItems: LineItem[] = [];
     for (let idx = 0; idx < rfq.items.length; idx++) {
       const item = rfq.items[idx];
+      const name = item.product_catalog?.name || item.raw_text;
       let erpProduct: { stock: number | null; cost: number | null; price: number | null; currency: string } | null = null;
-      if (adapter && item.matched_sku) {
-        erpProduct = await adapter.getProduct(item.matched_sku).catch(() => null);
+
+      if (adapter) {
+        erpProduct = item.matched_sku ? await adapter.getProduct(item.matched_sku).catch(() => null) : null;
+        if (!erpProduct) {
+          throw new BadRequestException(
+            `"${name}" (SKU ${item.matched_sku || 'unknown'}) was not found in the connected ERP — an ERP is connected, so the manual product catalog is ignored. Check the SKU matches your ERP's catalog, or disconnect the ERP to use manual pricing.`,
+          );
+        }
       }
 
       const qty = item.quantity ?? 1;
-      const unitPrice = erpProduct?.price ?? item.product_catalog?.standard_price ?? 0;
-      const cost = erpProduct?.cost ?? item.product_catalog?.cost ?? null;
-      const stock = erpProduct?.stock ?? null;
-      const name = item.product_catalog?.name || item.raw_text;
-      if (erpProduct?.currency) currency = erpProduct.currency;
-      else if (item.product_catalog?.currency) currency = item.product_catalog.currency;
+      const unitPrice = adapter ? (erpProduct!.price ?? 0) : (item.product_catalog?.standard_price ?? 0);
+      const cost = adapter ? erpProduct!.cost : (item.product_catalog?.cost ?? null);
+      const stock = adapter ? erpProduct!.stock : null;
+      if (adapter && erpProduct!.currency) currency = erpProduct!.currency;
+      else if (!adapter && item.product_catalog?.currency) currency = item.product_catalog.currency;
 
       // Hard guardrail: never let a quote leave below cost, regardless of who generated it.
       if (rules.below_cost_block && cost != null && unitPrice < cost) {
