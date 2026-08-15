@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { SupabaseService } from '../common/supabase.service';
 import { InvoicesService, LineItem } from '../invoices/invoices.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import { QuotationPdfService } from './quotation-pdf.service';
 import { shareDocumentViaWhatsApp } from '../common/document-whatsapp.util';
 
 function calcTotals(lineItems: LineItem[], taxRate: number, discount: number) {
@@ -17,6 +18,7 @@ export class QuotationsService {
     private readonly supabase: SupabaseService,
     private readonly invoices: InvoicesService,
     private readonly whatsapp: WhatsAppService,
+    private readonly pdf: QuotationPdfService,
   ) {}
 
   private async nextNumber(companyId: string): Promise<string> {
@@ -60,7 +62,7 @@ export class QuotationsService {
     return data;
   }
 
-  async create(companyId: string, userId: string, dto: any) {
+  async create(companyId: string, userId: string | null, dto: any) {
     const lineItems = dto.line_items || [];
     const totals = calcTotals(lineItems, dto.tax_rate || 0, dto.discount || 0);
 
@@ -137,8 +139,29 @@ export class QuotationsService {
     return this.get(companyId, id);
   }
 
-  async sendWhatsApp(companyId: string, userId: string, id: string) {
+  async sendWhatsApp(companyId: string, userId: string | null, id: string) {
     const quote = await this.get(companyId, id);
+
+    const { data: company } = await this.supabase.getAdminClient()
+      .from('companies').select('name').eq('id', companyId).maybeSingle();
+
+    const pdfBuffer = await this.pdf.render({
+      number: quote.number,
+      company_name: company?.name || 'Quotation',
+      contact_name: quote.contacts?.name,
+      contact_phone: quote.contacts?.phone,
+      line_items: quote.line_items || [],
+      subtotal: quote.subtotal,
+      tax_rate: quote.tax_rate,
+      tax_amount: quote.tax_amount,
+      discount: quote.discount,
+      total: quote.total,
+      currency: quote.currency,
+      valid_until: quote.valid_until,
+      notes: quote.notes,
+      terms: quote.terms,
+    }).catch(() => undefined); // PDF is a nice-to-have — fall back to the text-link send if rendering fails for any reason
+
     await shareDocumentViaWhatsApp(this.supabase, this.whatsapp, {
       companyId,
       senderId: userId,
@@ -148,6 +171,7 @@ export class QuotationsService {
       total: quote.total,
       currency: quote.currency,
       publicToken: quote.public_token,
+      pdfBuffer,
     });
     if (quote.status === 'draft') return this.send(companyId, id);
     return quote;

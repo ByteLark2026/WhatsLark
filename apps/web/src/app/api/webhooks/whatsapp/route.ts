@@ -1181,6 +1181,40 @@ is_rfq is true only if the customer is asking to buy/quote/price products with a
   await adminSupabase.from('rfq_items').insert(itemRows);
 
   console.log('[rfq] detected RFQ', rfq.id, 'items:', parsed.items.length);
+
+  // Auto-quote: only fires when every item matched (against product_catalog — SKU
+  // matching here doesn't check a connected ERP's live catalog) at or above the
+  // company's configured confidence floor. With an ERP connected, generateQuote
+  // still enforces that every matched_sku resolves there, so this safely no-ops
+  // (falls through to human review) whenever local matches don't line up with the
+  // real ERP catalog — it only actually skips review in manual product_catalog mode.
+  const { data: quoteSettings } = await adminSupabase
+    .from('ai_settings')
+    .select('rfq_auto_quote_confidence')
+    .eq('company_id', ctx.companyId)
+    .maybeSingle();
+  const threshold = Number(quoteSettings?.rfq_auto_quote_confidence) || 0;
+  if (threshold > 0 && itemRows.every((r) => r.status !== 'unmatched' && (r.confidence ?? 0) >= threshold)) {
+    const secret = process.env.INTERNAL_API_SECRET;
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'https://whatslark.onrender.com';
+    if (secret) {
+      // Awaited — Vercel serverless kills the function once the webhook response is
+      // sent, so a fire-and-forget call here would only complete by accident.
+      try {
+        const res = await fetch(`${apiBase}/api/v1/internal/rfq/${rfq.id}/auto-quote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
+          body: JSON.stringify({ company_id: ctx.companyId }),
+        });
+        if (res.ok) console.log('[rfq] auto-quoted', rfq.id);
+        else console.error('[rfq] auto-quote failed:', await res.text());
+      } catch (err) {
+        console.error('[rfq] auto-quote request error:', err);
+      }
+    } else {
+      console.error('[rfq] auto-quote confidence threshold set but INTERNAL_API_SECRET is not configured — skipping');
+    }
+  }
 }
 
 // ── Template approval / rejection callbacks ───────────────────────────────────

@@ -111,7 +111,7 @@ export class RfqService {
    * item is still unmatched, or (with a connection) not found in the ERP: a human must
    * resolve every line first rather than quote a guess.
    */
-  async generateQuote(companyId: string, userId: string, rfqId: string) {
+  async generateQuote(companyId: string, userId: string | null, rfqId: string) {
     const rfq = await this.get(companyId, rfqId);
     if (rfq.status === 'quoted') throw new BadRequestException('RFQ already has a quotation');
 

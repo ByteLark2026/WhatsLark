@@ -11,16 +11,21 @@ export async function shareDocumentViaWhatsApp(
   whatsapp: WhatsAppService,
   params: {
     companyId: string;
-    senderId: string;
+    senderId: string | null;
     contact: { id: string; phone: string; name?: string } | null | undefined;
     docType: 'invoice' | 'quotation';
     docNumber: string;
     total: number;
     currency: string;
     publicToken: string;
+    /** When provided and the 24h window is open, sent as an actual WhatsApp document
+     *  instead of a text link. Outside the window this is ignored — template messages
+     *  can't carry a dynamic attachment without their own approved document header,
+     *  which none of the templates here have. */
+    pdfBuffer?: Buffer;
   },
 ): Promise<{ conversationId: string; waMessageId?: string }> {
-  const { companyId, senderId, contact, docType, docNumber, total, currency, publicToken } = params;
+  const { companyId, senderId, contact, docType, docNumber, total, currency, publicToken, pdfBuffer } = params;
   if (!contact?.phone) throw new BadRequestException('This document has no linked contact with a phone number');
 
   const admin = supabase.getAdminClient();
@@ -76,9 +81,19 @@ export async function shareDocumentViaWhatsApp(
 
   let waMessageId: string | undefined;
   let sentContent = text;
-  let sentType: 'text' | 'template' = 'text';
+  let sentType: 'text' | 'template' | 'document' = 'text';
 
-  if (windowOpen) {
+  if (windowOpen && pdfBuffer) {
+    try {
+      const filename = `${label}-${docNumber}.pdf`;
+      const mediaId = await whatsapp.uploadDocument(channel.id, pdfBuffer, filename);
+      waMessageId = await whatsapp.sendDocumentMessage(channel.id, contact.phone, mediaId, filename, `${label} ${docNumber} — ${currency} ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      sentContent = `[${filename}] ${label} ${docNumber}`;
+      sentType = 'document';
+    } catch (err: any) {
+      throw new BadRequestException(`WhatsApp PDF send failed: ${err.message}`);
+    }
+  } else if (windowOpen) {
     try {
       waMessageId = await whatsapp.sendTextMessage(channel.id, contact.phone, text);
     } catch (err: any) {

@@ -361,6 +361,48 @@ export class WhatsAppService {
     return response.data?.messages?.[0]?.id;
   }
 
+  /** Uploads a document buffer (e.g. a generated quotation PDF) to Meta's media store, returns its media_id. */
+  async uploadDocument(channelId: string, buffer: Buffer, filename: string, mimeType = 'application/pdf'): Promise<string> {
+    const channel = await this.getChannelWithToken(channelId);
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
+    form.append('type', mimeType);
+
+    const res = await fetch(`${this.baseUrl}/${this.apiVersion}/${channel.phone_number_id}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${channel.access_token}` },
+      body: form as any,
+    });
+    if (!res.ok) throw new BadRequestException(`Media upload failed: ${await res.text().catch(() => res.statusText)}`);
+    const json = await res.json();
+    if (!json.id) throw new BadRequestException('Media upload returned no id');
+    return json.id;
+  }
+
+  async sendDocumentMessage(channelId: string, to: string, mediaId: string, filename: string, caption?: string): Promise<string> {
+    const channel = await this.getChannelWithToken(channelId);
+
+    const response = await axios.post(
+      `${this.baseUrl}/${this.apiVersion}/${channel.phone_number_id}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: to.replace(/\D/g, ''),
+        type: 'document',
+        document: { id: mediaId, filename, ...(caption ? { caption } : {}) },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${channel.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+
+    return response.data?.messages?.[0]?.id;
+  }
+
   async markMessageRead(channelId: string, waMessageId: string) {
     const channel = await this.getChannelWithToken(channelId);
     await axios.post(

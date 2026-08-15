@@ -53,6 +53,7 @@ export default function AiBotPage() {
         rfq_agent_enabled: settings.rfq_agent_enabled,
         rfq_auto_send: settings.rfq_auto_send,
         rfq_followup_hours: settings.rfq_followup_hours,
+        rfq_auto_quote_confidence: settings.rfq_auto_quote_confidence,
       })
       .eq('company_id', company.id)
       .select()
@@ -230,6 +231,21 @@ export default function AiBotPage() {
                 onCheckedChange={(v) => setSettings((s) => s ? { ...s, rfq_auto_send: v } : s)}
                 disabled={!settings?.rfq_agent_enabled}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Auto-generate & send quotation above confidence (%)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                className="w-32"
+                value={settings?.rfq_auto_quote_confidence ?? 0}
+                onChange={(e) => setSettings((s) => s ? { ...s, rfq_auto_quote_confidence: +e.target.value } : s)}
+                disabled={!settings?.rfq_agent_enabled}
+              />
+              <p className="text-xs text-muted-foreground">
+                When every item in an RFQ matches at or above this confidence, the quotation is generated and sent with no human review step. Set to 0 to always require review (recommended default). Pricing guardrails (below-cost block, margin approval) still apply.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Follow up after no response (hours)</Label>
