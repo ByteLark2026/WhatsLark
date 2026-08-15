@@ -1,4 +1,5 @@
 import { ErpAdapter, ErpProduct, ErpConnectionConfig, ErpConnectionCredentials } from '../erp-adapter.interface';
+import { normalizeUrl } from '../normalize-url.util';
 
 /**
  * WooCommerce REST API v3 (https://woocommerce.github.io/woocommerce-rest-api-docs/).
@@ -36,7 +37,7 @@ export class WooCommerceErpAdapter implements ErpAdapter {
 
   async searchProducts(query: string, limit = 10): Promise<ErpProduct[]> {
     try {
-      const url = new URL(`${this.config.storeUrl}/wp-json/wc/v3/products`);
+      const url = new URL(`${normalizeUrl(this.config.storeUrl)}/wp-json/wc/v3/products`);
       url.searchParams.set('search', query);
       url.searchParams.set('per_page', String(limit));
       const res = await fetch(url.toString(), { headers: this.authHeader() });

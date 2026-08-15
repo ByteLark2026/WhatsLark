@@ -1,4 +1,5 @@
 import { ErpAdapter, ErpProduct, ErpConnectionConfig, ErpConnectionCredentials } from '../erp-adapter.interface';
+import { normalizeUrl } from '../normalize-url.util';
 
 /**
  * Generic adapter for any REST API that exposes product lookup/search over HTTP.
@@ -36,7 +37,7 @@ export class CustomRestErpAdapter implements ErpAdapter {
   async getProduct(sku: string): Promise<ErpProduct | null> {
     const path = (this.config.getProductPath || '/products/:sku').replace(':sku', encodeURIComponent(sku));
     try {
-      const res = await fetch(`${this.config.baseUrl}${path}`, { headers: this.headers() });
+      const res = await fetch(`${normalizeUrl(this.config.baseUrl)}${path}`, { headers: this.headers() });
       if (!res.ok) return null;
       return this.toProduct(await res.json());
     } catch {
@@ -47,7 +48,7 @@ export class CustomRestErpAdapter implements ErpAdapter {
   async searchProducts(query: string, limit = 10): Promise<ErpProduct[]> {
     const path = this.config.searchPath || '/products';
     try {
-      const url = new URL(`${this.config.baseUrl}${path}`);
+      const url = new URL(`${normalizeUrl(this.config.baseUrl)}${path}`);
       url.searchParams.set('q', query);
       url.searchParams.set('limit', String(limit));
       const res = await fetch(url.toString(), { headers: this.headers() });

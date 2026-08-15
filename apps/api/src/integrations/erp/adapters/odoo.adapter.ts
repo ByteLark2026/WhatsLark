@@ -1,4 +1,5 @@
 import { ErpAdapter, ErpProduct, ErpConnectionConfig, ErpConnectionCredentials } from '../erp-adapter.interface';
+import { normalizeUrl } from '../normalize-url.util';
 
 /**
  * Odoo — JSON-RPC over /jsonrpc, product.product model via execute_kw.
@@ -19,7 +20,7 @@ export class OdooErpAdapter implements ErpAdapter {
   ) {}
 
   private async rpc(service: string, method: string, args: any[]): Promise<any> {
-    const res = await fetch(`${this.config.baseUrl}/jsonrpc`, {
+    const res = await fetch(`${normalizeUrl(this.config.baseUrl)}/jsonrpc`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
