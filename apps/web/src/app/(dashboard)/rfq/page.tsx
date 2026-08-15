@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ClipboardList, Package } from 'lucide-react';
+import { ClipboardList, Package, Plug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Header } from '@/components/layout/header';
@@ -43,7 +43,12 @@ export default function RfqListPage() {
       <Header
         title="AI RFQ Agent"
         subtitle="WhatsApp purchase requests detected and extracted automatically"
-        actions={<Button variant="outline" size="sm" onClick={() => router.push('/rfq/products')}><Package className="w-4 h-4 mr-1.5" />Manage products</Button>}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => router.push('/rfq/erp')}><Plug className="w-4 h-4 mr-1.5" />ERP connections</Button>
+            <Button variant="outline" size="sm" onClick={() => router.push('/rfq/products')}><Package className="w-4 h-4 mr-1.5" />Manage products</Button>
+          </div>
+        }
       />
       <div className="p-4 sm:p-6 space-y-5">
         <div className="flex gap-2 flex-wrap">
