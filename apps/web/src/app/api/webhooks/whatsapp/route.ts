@@ -1079,6 +1079,22 @@ function levenshtein(a: string, b: string): number {
   return dp[a.length][b.length];
 }
 
+/** Fraction of the query's words that appear (exactly, or as a substring in either
+ *  direction for words of 3+ chars — catches "wheelchair" containing "wheel"/"chair"
+ *  as separate query words) somewhere in the candidate's words. Whole-string
+ *  Levenshtein alone falls apart for a short query against a long real-world product
+ *  title (a marketing name with a dozen extra words) — this handles that case, while
+ *  whole-string similarity still handles near-identical short names well. */
+function tokenCoverage(query: string, candidate: string): number {
+  const qWords = normalizeForMatch(query).split(' ').filter(Boolean);
+  const cWords = normalizeForMatch(candidate).split(' ').filter(Boolean);
+  if (!qWords.length || !cWords.length) return 0;
+  const matched = qWords.filter((qw) => cWords.some((cw) =>
+    qw === cw || (qw.length >= 3 && cw.includes(qw)) || (cw.length >= 3 && qw.includes(cw)),
+  ));
+  return (matched.length / qWords.length) * 100;
+}
+
 function textSimilarity(a: string, b: string): number {
   const na = normalizeForMatch(a);
   const nb = normalizeForMatch(b);
@@ -1086,7 +1102,7 @@ function textSimilarity(a: string, b: string): number {
   const maxLen = Math.max(na.length, nb.length);
   let score = maxLen ? (1 - levenshtein(na, nb) / maxLen) * 100 : 0;
   if (na.includes(nb) || nb.includes(na)) score = Math.max(score, 90);
-  return score;
+  return Math.max(score, tokenCoverage(a, b));
 }
 
 /** ERP connected -> search its live catalog exclusively (same authority rule
