@@ -311,18 +311,71 @@ is_rfq is true only if the customer is asking to buy/quote/price products with a
       return;
     }
 
-    await this.supabase.getAdminClient().from('rfq_items').insert(
-      parsed.items.map((item) => ({
+    const itemRows = await Promise.all(parsed.items.map(async (item) => {
+      const match = await this.matchRfqItemToCatalog(ctx.companyId, item.raw_text);
+      const status = !match ? 'unmatched' : match.confidence >= 95 ? 'auto_matched' : match.confidence >= 80 ? 'needs_review' : 'unmatched';
+      return {
         rfq_id: rfq.id,
         company_id: ctx.companyId,
         raw_text: item.raw_text,
         quantity: item.quantity ?? null,
         unit: item.unit ?? null,
-        status: 'needs_review',
-      })),
-    );
+        matched_product_id: status === 'unmatched' ? null : match!.productId,
+        matched_sku: status === 'unmatched' ? null : match!.sku,
+        confidence: match?.confidence ?? null,
+        status,
+      };
+    }));
+
+    await this.supabase.getAdminClient().from('rfq_items').insert(itemRows);
 
     this.logger.log(`Detected RFQ ${rfq.id}, items: ${parsed.items.length}`);
+  }
+
+  // Fuzzy text match only — LLM/embeddings are not the source of truth for SKU,
+  // structured catalogue data is. Levenshtein-ratio scoring is enough for MVP.
+  private normalizeForMatch(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  private levenshtein(a: string, b: string): number {
+    const dp: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        dp[i][j] = a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+    return dp[a.length][b.length];
+  }
+
+  private textSimilarity(a: string, b: string): number {
+    const na = this.normalizeForMatch(a);
+    const nb = this.normalizeForMatch(b);
+    if (!na || !nb) return 0;
+    const maxLen = Math.max(na.length, nb.length);
+    let score = maxLen ? (1 - this.levenshtein(na, nb) / maxLen) * 100 : 0;
+    if (na.includes(nb) || nb.includes(na)) score = Math.max(score, 90);
+    return score;
+  }
+
+  private async matchRfqItemToCatalog(companyId: string, rawText: string): Promise<{ productId: string; sku: string; confidence: number } | null> {
+    const { data: products } = await this.supabase.getAdminClient()
+      .from('product_catalog')
+      .select('id, sku, name, aliases')
+      .eq('company_id', companyId)
+      .eq('is_active', true);
+    if (!products?.length) return null;
+
+    let best: { productId: string; sku: string; confidence: number } | null = null;
+    for (const p of products) {
+      const candidates = [p.name, ...(p.aliases || [])];
+      const score = Math.max(...candidates.map((c: string) => this.textSimilarity(rawText, c)));
+      if (!best || score > best.confidence) best = { productId: p.id, sku: p.sku, confidence: Math.round(score * 100) / 100 };
+    }
+    return best;
   }
 
   private async handleStatusUpdate(status: any) {
