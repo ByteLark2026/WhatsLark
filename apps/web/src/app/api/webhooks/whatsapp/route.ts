@@ -1089,7 +1089,41 @@ function textSimilarity(a: string, b: string): number {
   return score;
 }
 
-async function matchRfqItemToCatalog(companyId: string, rawText: string): Promise<{ productId: string; sku: string; confidence: number } | null> {
+/** ERP connected -> search its live catalog exclusively (same authority rule
+ *  generateQuote and the review-page picker already enforce: manual product_catalog
+ *  is ignored once an ERP is connected, so matching against it here would only
+ *  ever produce a "match" that quote generation refuses later). No ERP -> local
+ *  product_catalog, as before. */
+async function matchRfqItemToCatalog(companyId: string, rawText: string): Promise<{ productId: string | null; sku: string; confidence: number } | null> {
+  const secret = process.env.INTERNAL_API_SECRET;
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'https://whatslark.onrender.com';
+  if (secret) {
+    try {
+      const res = await fetch(`${apiBase}/api/v1/internal/rfq/erp-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
+        body: JSON.stringify({ company_id: companyId, query: rawText }),
+      });
+      if (res.ok) {
+        const { connected, results } = await res.json();
+        if (connected) {
+          if (!results?.length) return null;
+          let best: { productId: null; sku: string; confidence: number } | null = null;
+          for (const p of results) {
+            const score = textSimilarity(rawText, p.name);
+            if (!best || score > best.confidence) best = { productId: null, sku: p.sku, confidence: Math.round(score * 100) / 100 };
+          }
+          return best;
+        }
+        // connected:false — no ERP configured, fall through to product_catalog below.
+      } else {
+        console.error('[rfq] erp-search failed:', await res.text());
+      }
+    } catch (err) {
+      console.error('[rfq] erp-search request error:', err);
+    }
+  }
+
   const { data: products } = await adminSupabase
     .from('product_catalog')
     .select('id, sku, name, aliases')
