@@ -7,10 +7,12 @@ import { RfqService } from './rfq.service';
 import { PricingRulesController } from './pricing-rules.controller';
 import { PricingRulesService } from './pricing-rules.service';
 import { RfqFollowUpService } from './rfq-followup.service';
+import { ProductCatalogController } from './product-catalog.controller';
+import { ProductCatalogService } from './product-catalog.service';
 
 @Module({
   imports: [SupabaseModule, QuotationsModule, ErpModule],
-  controllers: [RfqController, PricingRulesController],
-  providers: [RfqService, PricingRulesService, RfqFollowUpService],
+  controllers: [RfqController, PricingRulesController, ProductCatalogController],
+  providers: [RfqService, PricingRulesService, RfqFollowUpService, ProductCatalogService],
 })
 export class RfqModule {}
