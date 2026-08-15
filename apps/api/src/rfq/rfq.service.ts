@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { SupabaseService } from '../common/supabase.service';
 import { QuotationsService } from '../quotations/quotations.service';
 import { PricingRulesService } from './pricing-rules.service';
+import { ErpAdapterFactory } from '../integrations/erp/erp-adapter.factory';
 import { LineItem } from '../invoices/invoices.service';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class RfqService {
     private readonly supabase: SupabaseService,
     private readonly quotations: QuotationsService,
     private readonly pricingRules: PricingRulesService,
+    private readonly erpAdapters: ErpAdapterFactory,
   ) {}
 
   async list(companyId: string, opts: { status?: string; page?: number; limit?: number } = {}) {
@@ -87,9 +89,11 @@ export class RfqService {
   }
 
   /**
-   * Builds a quotation draft from the RFQ's matched items. Price/cost always come from
-   * product_catalog (never the LLM) — the RFQ agent's core commercial-safety rule.
-   * Refuses if any item is still unmatched: a human must resolve every line first.
+   * Builds a quotation draft from the RFQ's matched items. Price/cost/stock come from
+   * the tenant's connected ERP when one exists (ErpAdapterFactory), falling back to
+   * the local product_catalog otherwise — never the LLM, per the RFQ agent's core
+   * commercial-safety rule. Refuses if any item is still unmatched: a human must
+   * resolve every line first.
    */
   async generateQuote(companyId: string, userId: string, rfqId: string) {
     const rfq = await this.get(companyId, rfqId);
@@ -101,38 +105,51 @@ export class RfqService {
     }
 
     const rules = await this.pricingRules.get(companyId);
+    const adapter = await this.erpAdapters.getAdapter(companyId).catch(() => null);
     let requiresApproval = false;
+    let currency = 'AED';
 
-    const lineItems: LineItem[] = rfq.items.map((item: any, idx: number) => {
+    const lineItems: LineItem[] = [];
+    for (let idx = 0; idx < rfq.items.length; idx++) {
+      const item = rfq.items[idx];
+      let erpProduct: { stock: number | null; cost: number | null; price: number | null; currency: string } | null = null;
+      if (adapter && item.matched_sku) {
+        erpProduct = await adapter.getProduct(item.matched_sku).catch(() => null);
+      }
+
       const qty = item.quantity ?? 1;
-      const unitPrice = item.product_catalog?.standard_price ?? 0;
-      const cost = item.product_catalog?.cost ?? null;
+      const unitPrice = erpProduct?.price ?? item.product_catalog?.standard_price ?? 0;
+      const cost = erpProduct?.cost ?? item.product_catalog?.cost ?? null;
+      const stock = erpProduct?.stock ?? null;
       const name = item.product_catalog?.name || item.raw_text;
+      if (erpProduct?.currency) currency = erpProduct.currency;
+      else if (item.product_catalog?.currency) currency = item.product_catalog.currency;
 
       // Hard guardrail: never let a quote leave below cost, regardless of who generated it.
       if (rules.below_cost_block && cost != null && unitPrice < cost) {
         throw new BadRequestException(`"${name}" is priced below cost (${unitPrice} < ${cost}) — blocked by pricing guardrails`);
       }
-      // Soft guardrail: below the configured minimum margin flags the quote for manager approval
-      // instead of blocking it outright — the standard price itself may just be thin on this SKU.
+      // Soft guardrails: under-margin or insufficient live ERP stock don't block generation,
+      // they flag the quotation for manager approval instead.
       if (cost != null && unitPrice > 0) {
         const marginPct = ((unitPrice - cost) / unitPrice) * 100;
         if (marginPct < rules.min_margin_pct) requiresApproval = true;
       }
+      if (stock != null && qty > stock) requiresApproval = true;
 
-      return {
+      lineItems.push({
         id: String(idx + 1),
         description: `${name}${item.unit ? ` (${item.unit})` : ''}`,
         qty,
         unit_price: unitPrice,
         amount: qty * unitPrice,
-      };
-    });
+      });
+    }
 
     const quotation = await this.quotations.create(companyId, userId, {
       contact_id: rfq.contact_id,
       line_items: lineItems,
-      currency: rfq.items[0]?.product_catalog?.currency || 'AED',
+      currency,
     });
 
     await this.supabase.getAdminClient()
