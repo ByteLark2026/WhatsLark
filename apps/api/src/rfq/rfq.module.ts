@@ -12,7 +12,10 @@ import { ProductCatalogService } from './product-catalog.service';
 
 @Module({
   imports: [SupabaseModule, QuotationsModule, ErpModule],
-  controllers: [RfqController, PricingRulesController, ProductCatalogController],
+  // Order matters: Nest/Express matches routes in registration order, and RfqController's
+  // GET /rfq/:id would otherwise swallow literal-path siblings like GET /rfq/products or
+  // GET /rfq/pricing-rules (id='products'/'pricing-rules') if it registered first.
+  controllers: [PricingRulesController, ProductCatalogController, RfqController],
   providers: [RfqService, PricingRulesService, RfqFollowUpService, ProductCatalogService],
 })
 export class RfqModule {}
