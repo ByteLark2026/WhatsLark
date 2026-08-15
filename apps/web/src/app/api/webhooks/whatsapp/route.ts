@@ -1138,6 +1138,8 @@ async function matchRfqItemToCatalog(companyId: string, rawText: string): Promis
     } catch (err) {
       console.error('[rfq] erp-search request error:', err);
     }
+  } else {
+    console.error('[rfq] INTERNAL_API_SECRET not set in this runtime — skipping ERP search, matching against product_catalog only');
   }
 
   const { data: products } = await adminSupabase
