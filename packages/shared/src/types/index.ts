@@ -365,6 +365,7 @@ export interface AISettings extends BaseEntity {
   default_language: string;
   rfq_agent_enabled: boolean;
   rfq_auto_send: boolean;
+  rfq_followup_hours: number;
 }
 
 // ----- Subscription -----

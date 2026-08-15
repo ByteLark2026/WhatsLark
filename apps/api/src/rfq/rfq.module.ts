@@ -5,10 +5,11 @@ import { RfqController } from './rfq.controller';
 import { RfqService } from './rfq.service';
 import { PricingRulesController } from './pricing-rules.controller';
 import { PricingRulesService } from './pricing-rules.service';
+import { RfqFollowUpService } from './rfq-followup.service';
 
 @Module({
   imports: [SupabaseModule, QuotationsModule],
   controllers: [RfqController, PricingRulesController],
-  providers: [RfqService, PricingRulesService],
+  providers: [RfqService, PricingRulesService, RfqFollowUpService],
 })
 export class RfqModule {}

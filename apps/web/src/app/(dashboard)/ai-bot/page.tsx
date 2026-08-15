@@ -52,6 +52,7 @@ export default function AiBotPage() {
         default_language: settings.default_language,
         rfq_agent_enabled: settings.rfq_agent_enabled,
         rfq_auto_send: settings.rfq_auto_send,
+        rfq_followup_hours: settings.rfq_followup_hours,
       })
       .eq('company_id', company.id)
       .select()
@@ -229,6 +230,18 @@ export default function AiBotPage() {
                 onCheckedChange={(v) => setSettings((s) => s ? { ...s, rfq_auto_send: v } : s)}
                 disabled={!settings?.rfq_agent_enabled}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Follow up after no response (hours)</Label>
+              <Input
+                type="number"
+                min={0}
+                className="w-32"
+                value={settings?.rfq_followup_hours ?? 0}
+                onChange={(e) => setSettings((s) => s ? { ...s, rfq_followup_hours: +e.target.value } : s)}
+                disabled={!settings?.rfq_agent_enabled}
+              />
+              <p className="text-xs text-muted-foreground">Sends one automatic follow-up if a quotation gets no reply within this many hours. Set to 0 to disable.</p>
             </div>
           </CardContent>
         </Card>
