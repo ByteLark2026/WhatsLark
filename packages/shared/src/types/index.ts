@@ -363,6 +363,8 @@ export interface AISettings extends BaseEntity {
   model: string;
   tts_voice: string;
   default_language: string;
+  rfq_agent_enabled: boolean;
+  rfq_auto_send: boolean;
 }
 
 // ----- Subscription -----

@@ -110,7 +110,24 @@ export class QuotationsService {
       .from('quotation_approvals')
       .insert({ quotation_id: id, company_id: companyId, approver_id: approverId, status: 'approved', note });
 
-    return this.update(companyId, id, { approved_by: approverId, approved_at: new Date().toISOString() });
+    const updated = await this.update(companyId, id, { approved_by: approverId, approved_at: new Date().toISOString() });
+
+    if (quote.rfq_id) {
+      const { data: settings } = await this.supabase.getAdminClient()
+        .from('ai_settings')
+        .select('rfq_auto_send')
+        .eq('company_id', companyId)
+        .maybeSingle();
+      if (settings?.rfq_auto_send) {
+        try {
+          return await this.sendWhatsApp(companyId, approverId, id);
+        } catch {
+          // Manual "Send to WhatsApp" still works from the quote builder.
+        }
+      }
+    }
+
+    return updated;
   }
 
   async rejectPricing(companyId: string, id: string, approverId: string, note?: string) {

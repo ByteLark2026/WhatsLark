@@ -1,0 +1,2 @@
+ALTER TABLE ai_settings
+  ADD COLUMN IF NOT EXISTS rfq_auto_send BOOLEAN NOT NULL DEFAULT false;

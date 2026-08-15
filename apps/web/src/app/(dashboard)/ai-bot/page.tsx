@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bot, Loader2, Save, Sparkles } from 'lucide-react';
+import { Bot, Loader2, Save, Sparkles, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -50,6 +50,8 @@ export default function AiBotPage() {
         model: settings.model,
         tts_voice: settings.tts_voice,
         default_language: settings.default_language,
+        rfq_agent_enabled: settings.rfq_agent_enabled,
+        rfq_auto_send: settings.rfq_auto_send,
       })
       .eq('company_id', company.id)
       .select()
@@ -195,6 +197,38 @@ export default function AiBotPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">Used when replying to a customer&apos;s voice note with a voice note.</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-primary" /> AI RFQ Agent
+            </CardTitle>
+            <CardDescription>Detect purchase requests in WhatsApp messages and draft quotations automatically</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Enable RFQ detection</Label>
+                <p className="text-xs text-muted-foreground">Classifies inbound messages and extracts requested items — matching, review and quoting still need a human.</p>
+              </div>
+              <Switch
+                checked={settings?.rfq_agent_enabled ?? false}
+                onCheckedChange={(v) => setSettings((s) => s ? { ...s, rfq_agent_enabled: v } : s)}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Auto-send quotation via WhatsApp</Label>
+                <p className="text-xs text-muted-foreground">Sends automatically once a quote is ready (skipped if it needs manager approval — manual send still always works from the quote page).</p>
+              </div>
+              <Switch
+                checked={settings?.rfq_auto_send ?? false}
+                onCheckedChange={(v) => setSettings((s) => s ? { ...s, rfq_auto_send: v } : s)}
+                disabled={!settings?.rfq_agent_enabled}
+              />
             </div>
           </CardContent>
         </Card>

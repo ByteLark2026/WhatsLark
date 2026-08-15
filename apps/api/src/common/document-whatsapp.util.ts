@@ -62,11 +62,53 @@ export async function shareDocumentViaWhatsApp(
   const link = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/${docType === 'invoice' ? 'inv' : 'q'}/${publicToken}`;
   const text = `${label} ${docNumber}\nTotal: ${currency} ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\nView & download: ${link}`;
 
+  // WhatsApp only allows free-form sends within 24h of the customer's last inbound
+  // message. Outside that window, only an approved template can reach them.
+  const { data: lastInbound } = await admin
+    .from('messages')
+    .select('created_at')
+    .eq('conversation_id', conversationId)
+    .eq('direction', 'inbound')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const windowOpen = !!lastInbound && (Date.now() - new Date(lastInbound.created_at).getTime()) < 24 * 60 * 60 * 1000;
+
   let waMessageId: string | undefined;
-  try {
-    waMessageId = await whatsapp.sendTextMessage(channel.id, contact.phone, text);
-  } catch (err: any) {
-    throw new BadRequestException(`WhatsApp send failed: ${err.message}`);
+  let sentContent = text;
+  let sentType: 'text' | 'template' = 'text';
+
+  if (windowOpen) {
+    try {
+      waMessageId = await whatsapp.sendTextMessage(channel.id, contact.phone, text);
+    } catch (err: any) {
+      throw new BadRequestException(`WhatsApp send failed: ${err.message}`);
+    }
+  } else {
+    const templateName = `${docType}_followup`;
+    const { data: template } = await admin
+      .from('message_templates')
+      .select('name, language, components')
+      .eq('company_id', companyId)
+      .eq('name', templateName)
+      .eq('status', 'approved')
+      .maybeSingle();
+    if (!template) {
+      throw new BadRequestException(
+        `The 24-hour WhatsApp window is closed for this contact and no approved "${templateName}" template is configured — create and get it approved in Templates first.`,
+      );
+    }
+    const components = [{
+      type: 'body',
+      parameters: [{ type: 'text', text: contact.name || 'there' }, { type: 'text', text: docNumber }],
+    }];
+    try {
+      waMessageId = await whatsapp.sendTemplateMessage(channel.id, contact.phone, template.name, template.language, components);
+    } catch (err: any) {
+      throw new BadRequestException(`WhatsApp template send failed: ${err.message}`);
+    }
+    sentContent = `[Template: ${templateName}] Hello ${contact.name || 'there'}, following up on ${label.toLowerCase()} ${docNumber}.`;
+    sentType = 'template';
   }
 
   await admin.from('messages').insert({
@@ -74,8 +116,8 @@ export async function shareDocumentViaWhatsApp(
     company_id: companyId,
     channel_id: channel.id,
     direction: 'outbound',
-    type: 'text',
-    content: text,
+    type: sentType,
+    content: sentContent,
     status: 'sent',
     wa_message_id: waMessageId,
     sender_id: senderId,
@@ -84,7 +126,7 @@ export async function shareDocumentViaWhatsApp(
 
   await admin.from('conversations').update({
     last_message_at: new Date().toISOString(),
-    last_message_preview: text.substring(0, 100),
+    last_message_preview: sentContent.substring(0, 100),
     status: 'open',
   }).eq('id', conversationId);
 

@@ -146,6 +146,25 @@ export class RfqService {
       .eq('id', rfqId)
       .eq('company_id', companyId);
 
-    return { ...quotation, rfq_id: rfqId, requires_approval: requiresApproval };
+    let autoSendError: string | undefined;
+    if (!requiresApproval) {
+      const { data: settings } = await this.supabase.getAdminClient()
+        .from('ai_settings')
+        .select('rfq_auto_send')
+        .eq('company_id', companyId)
+        .maybeSingle();
+      if (settings?.rfq_auto_send) {
+        try {
+          await this.quotations.sendWhatsApp(companyId, userId, quotation.id);
+        } catch (err: any) {
+          // Manual "Send to WhatsApp" in the quote builder still works — this just
+          // means auto-send couldn't complete (no contact phone, window closed with
+          // no approved template, etc).
+          autoSendError = err.message;
+        }
+      }
+    }
+
+    return { ...quotation, rfq_id: rfqId, requires_approval: requiresApproval, auto_send_error: autoSendError };
   }
 }
