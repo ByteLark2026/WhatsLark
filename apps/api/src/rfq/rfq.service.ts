@@ -48,29 +48,43 @@ export class RfqService {
     return { ...rfq, items: items || [] };
   }
 
-  /** Human correction — assigns/reassigns the matched product for an item, or clears it. */
-  async updateItem(companyId: string, rfqId: string, itemId: string, dto: { matched_product_id?: string | null; quantity?: number; unit?: string }) {
+  /**
+   * Human correction — assigns/reassigns the matched product for an item, or clears it.
+   * Two sources: a local product_catalog row (matched_product_id), or — when an ERP is
+   * connected — a SKU picked straight from the ERP's live catalog (matched_sku, no local
+   * row exists for it). The picker (GET /rfq/products/search) only ever offers one or the
+   * other depending on whether an ERP is connected, but this validates either way.
+   */
+  async updateItem(companyId: string, rfqId: string, itemId: string, dto: { matched_product_id?: string | null; matched_sku?: string | null; quantity?: number; unit?: string }) {
     const updates: Record<string, any> = {};
 
-    if (dto.matched_product_id !== undefined) {
-      if (dto.matched_product_id === null) {
-        updates.matched_product_id = null;
-        updates.matched_sku = null;
-        updates.confidence = null;
-        updates.status = 'unmatched';
-      } else {
-        const { data: product } = await this.supabase.getAdminClient()
-          .from('product_catalog')
-          .select('id, sku')
-          .eq('company_id', companyId)
-          .eq('id', dto.matched_product_id)
-          .maybeSingle();
-        if (!product) throw new BadRequestException('Product not found for this company');
-        updates.matched_product_id = product.id;
-        updates.matched_sku = product.sku;
-        updates.confidence = 100; // human-confirmed
-        updates.status = 'auto_matched';
+    if (dto.matched_product_id !== undefined && dto.matched_product_id !== null) {
+      const { data: product } = await this.supabase.getAdminClient()
+        .from('product_catalog')
+        .select('id, sku')
+        .eq('company_id', companyId)
+        .eq('id', dto.matched_product_id)
+        .maybeSingle();
+      if (!product) throw new BadRequestException('Product not found for this company');
+      updates.matched_product_id = product.id;
+      updates.matched_sku = product.sku;
+      updates.confidence = 100; // human-confirmed
+      updates.status = 'auto_matched';
+    } else if (dto.matched_sku !== undefined && dto.matched_sku !== null) {
+      const adapter = await this.erpAdapters.getAdapter(companyId).catch(() => null);
+      if (adapter) {
+        const erpProduct = await adapter.getProduct(dto.matched_sku).catch(() => null);
+        if (!erpProduct) throw new BadRequestException(`SKU "${dto.matched_sku}" was not found in the connected ERP`);
       }
+      updates.matched_product_id = null;
+      updates.matched_sku = dto.matched_sku;
+      updates.confidence = 100; // human-confirmed
+      updates.status = 'auto_matched';
+    } else if (dto.matched_product_id === null || dto.matched_sku === null) {
+      updates.matched_product_id = null;
+      updates.matched_sku = null;
+      updates.confidence = null;
+      updates.status = 'unmatched';
     }
     if (dto.quantity !== undefined) updates.quantity = dto.quantity;
     if (dto.unit !== undefined) updates.unit = dto.unit;
@@ -101,7 +115,7 @@ export class RfqService {
     const rfq = await this.get(companyId, rfqId);
     if (rfq.status === 'quoted') throw new BadRequestException('RFQ already has a quotation');
 
-    const unresolved = rfq.items.filter((i: any) => i.status === 'unmatched' || !i.matched_product_id);
+    const unresolved = rfq.items.filter((i: any) => i.status === 'unmatched' || !i.matched_sku);
     if (unresolved.length > 0) {
       throw new BadRequestException(`Resolve ${unresolved.length} unmatched item(s) before generating a quote`);
     }

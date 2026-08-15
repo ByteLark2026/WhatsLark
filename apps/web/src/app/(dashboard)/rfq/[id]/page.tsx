@@ -1,17 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, FileText, CheckCircle2, AlertTriangle, HelpCircle } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle2, AlertTriangle, HelpCircle, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Header } from '@/components/layout/header';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { createClient } from '@/lib/supabase';
-import { useAuthStore } from '@/store/auth';
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-600',
@@ -32,15 +30,100 @@ interface RfqItem {
   product_catalog?: { id: string; sku: string; name: string; standard_price: number; currency: string } | null;
 }
 
-interface Product { id: string; sku: string; name: string; standard_price: number; }
+interface SearchResult { source: 'erp' | 'catalog'; id?: string; sku: string; name: string; price: number | null; stock: number | null; }
+
+/** Searches whatever the backend says is authoritative for this company — the
+ *  connected ERP's live catalog if one exists, otherwise the manual product_catalog.
+ *  Never lets the user pick a manual product when an ERP is connected (backend
+ *  enforces this too — this just keeps the picker from offering options that
+ *  generateQuote would reject). */
+function ProductPicker({ item, onPick }: { item: RfqItem; onPick: (result: SearchResult) => void }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  const currentLabel = item.matched_sku
+    ? `${item.product_catalog?.name || item.matched_sku} (${item.matched_sku})`
+    : '';
+
+  const search = (q: string) => {
+    setLoading(true);
+    api.get<SearchResult[]>(`/rfq/products/search?q=${encodeURIComponent(q)}`)
+      .then((r) => setResults(r || []))
+      .catch(() => setResults([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => search(query), 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, open]);
+
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={boxRef}>
+      <div className="relative">
+        <Input
+          className="h-8 text-xs pr-6"
+          placeholder="Search products…"
+          value={open ? query : currentLabel}
+          onFocus={() => { setOpen(true); setQuery(''); search(''); }}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {item.matched_sku && !open && (
+          <button
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-destructive"
+            onClick={(e) => { e.stopPropagation(); onPick({ source: 'catalog', sku: '', name: '', price: null, stock: null }); }}
+            title="Clear"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        )}
+        {!item.matched_sku && (
+          <Search className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+        )}
+      </div>
+      {open && (
+        <div className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded-lg border bg-white shadow-lg">
+          {loading ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">Searching…</p>
+          ) : results.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">No matches</p>
+          ) : (
+            results.map((r) => (
+              <button
+                key={`${r.source}-${r.sku}`}
+                className="w-full text-left px-3 py-2 text-xs hover:bg-muted/60 flex items-center justify-between gap-2"
+                onClick={() => { onPick(r); setOpen(false); }}
+              >
+                <span className="truncate">{r.name} <span className="text-muted-foreground">({r.sku})</span></span>
+                {r.price != null && <span className="shrink-0 font-medium">{r.price}</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function RfqDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { toast } = useToast();
-  const { company } = useAuthStore();
   const [rfq, setRfq] = useState<any>(null);
-  const [products, setProducts] = useState<Product[]>([]);
   const [generating, setGenerating] = useState(false);
 
   const load = async () => {
@@ -54,20 +137,15 @@ export default function RfqDetailPage() {
 
   useEffect(() => { load(); }, [id]);
 
-  useEffect(() => {
-    if (!company?.id) return;
-    createClient()
-      .from('product_catalog')
-      .select('id, sku, name, standard_price')
-      .eq('company_id', company.id)
-      .eq('is_active', true)
-      .order('name', { ascending: true })
-      .then(({ data }) => setProducts(data || []));
-  }, [company?.id]);
-
-  const reassignItem = async (itemId: string, productId: string) => {
+  const reassignItem = async (itemId: string, result: SearchResult) => {
     try {
-      await api.patch(`/rfq/${id}/items/${itemId}`, { matched_product_id: productId || null });
+      if (!result.sku) {
+        await api.patch(`/rfq/${id}/items/${itemId}`, { matched_product_id: null });
+      } else if (result.source === 'catalog') {
+        await api.patch(`/rfq/${id}/items/${itemId}`, { matched_product_id: result.id });
+      } else {
+        await api.patch(`/rfq/${id}/items/${itemId}`, { matched_sku: result.sku });
+      }
       await load();
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -89,7 +167,7 @@ export default function RfqDetailPage() {
   if (!rfq) return <div className="p-8 text-center text-muted-foreground">Loading…</div>;
 
   const items: RfqItem[] = rfq.items || [];
-  const allResolved = items.length > 0 && items.every((i) => i.status !== 'unmatched' && i.matched_product_id);
+  const allResolved = items.length > 0 && items.every((i) => i.status !== 'unmatched' && i.matched_sku);
 
   return (
     <div>
@@ -119,7 +197,7 @@ export default function RfqDetailPage() {
           <p className="text-sm bg-muted/50 rounded-lg p-3 whitespace-pre-wrap">{rfq.raw_message}</p>
         </div>
 
-        <div className="border rounded-xl overflow-hidden bg-white">
+        <div className="border rounded-xl overflow-visible bg-white">
           <table className="w-full text-sm">
             <thead className="bg-muted/60">
               <tr>
@@ -141,14 +219,7 @@ export default function RfqDetailPage() {
                     </td>
                     <td className="px-3 py-2.5 text-right">{item.quantity ?? '—'}</td>
                     <td className="px-3 py-2.5">
-                      <Select value={item.matched_product_id || ''} onValueChange={(v) => reassignItem(item.id, v)}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select product…" /></SelectTrigger>
-                        <SelectContent>
-                          {products.map((p) => (
-                            <SelectItem key={p.id} value={p.id} className="text-xs">{p.name} ({p.sku})</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <ProductPicker item={item} onPick={(r) => reassignItem(item.id, r)} />
                     </td>
                     <td className="px-3 py-2.5">
                       <Badge className={cn('text-[10px] gap-1', statusInfo.className)}>
