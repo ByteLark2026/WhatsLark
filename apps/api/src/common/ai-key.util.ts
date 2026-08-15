@@ -21,5 +21,7 @@ export async function resolveAiProviderKey(supabase: SupabaseClient, provider: s
       if (key) return key;
     } catch { /* try the next one */ }
   }
-  return process.env.OPENAI_API_KEY || '';
+  if (provider === 'openai') return process.env.OPENAI_API_KEY || '';
+  if (provider === 'gemini') return process.env.GEMINI_API_KEY || '';
+  return '';
 }

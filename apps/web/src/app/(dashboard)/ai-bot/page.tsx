@@ -149,8 +149,8 @@ export default function AiBotPage() {
                   <SelectItem value="gpt-4o-mini">GPT-4o Mini (Fast, affordable)</SelectItem>
                   <SelectItem value="gpt-4o">GPT-4o (Best quality)</SelectItem>
                   <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Legacy)</SelectItem>
-                  <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash (Google, fast)</SelectItem>
-                  <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro (Google, best quality)</SelectItem>
+                  <SelectItem value="gemini-flash-latest">Gemini Flash (Google, fast)</SelectItem>
+                  <SelectItem value="gemini-pro-latest">Gemini Pro (Google, best quality)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
