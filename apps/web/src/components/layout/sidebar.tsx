@@ -8,6 +8,7 @@ import {
   FileText, Zap, Bot, Phone, PhoneCall, UserCog, Settings, LogOut, ChevronDown,
   Shield, BarChart2, Code2, LifeBuoy, ShoppingBag, PieChart, Calendar, FormInput,
   Briefcase, Target, FolderKanban, Activity, Award, Receipt, FileCheck, Image as ImageIcon,
+  ClipboardList,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -64,6 +65,7 @@ const navSections = [
       { href: '/leads/scoring', label: 'Lead Scoring', icon: Activity },
       { href: '/pipeline', label: 'Pipeline', icon: Target },
       { href: '/crm', label: 'CRM', icon: Briefcase },
+      { href: '/rfq', label: 'AI RFQ Agent', icon: ClipboardList },
     ],
   },
   {
