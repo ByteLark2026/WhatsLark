@@ -237,7 +237,92 @@ export class WhatsAppWebhookService {
           wasVoiceNote: type === 'audio' && !!transcript,
         }).catch((err) => this.logger.error('AI auto-reply error', err));
       }
+
+      // AI RFQ Agent — Phase 1: detect + log only, never sends anything.
+      await this.detectAndLogRfq({
+        companyId, contactId: contact.id, conversationId: conversation.id, messageText: content,
+      }).catch((err) => this.logger.error('RFQ detection error', err));
     }
+  }
+
+  private async detectAndLogRfq(ctx: {
+    companyId: string; contactId: string; conversationId: string; messageText: string;
+  }) {
+    if (!ctx.messageText || ctx.messageText.trim().length < 3) return;
+
+    const { data: settings } = await this.supabase.getAdminClient()
+      .from('ai_settings')
+      .select('rfq_agent_enabled')
+      .eq('company_id', ctx.companyId)
+      .maybeSingle();
+    if (!settings?.rfq_agent_enabled) return;
+
+    const apiKey = await resolveAiProviderKey(this.supabase.getAdminClient());
+    if (!apiKey) return;
+
+    const systemPrompt = `You classify WhatsApp messages from B2B buyers and extract requested items when present.
+Reply with ONLY strict JSON, no prose, no markdown fences:
+{"is_rfq": boolean, "items": [{"raw_text": string, "quantity": number|null, "unit": string|null}]}
+is_rfq is true only if the customer is asking to buy/quote/price products with a quantity or clear product request. Greetings, support questions and small talk are is_rfq:false with an empty items array.`;
+
+    const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: ctx.messageText },
+        ],
+        max_tokens: 400,
+        temperature: 0.7,
+      }),
+    });
+    if (!aiRes.ok) {
+      this.logger.error(`RFQ detection: OpenAI call failed (${aiRes.status})`);
+      return;
+    }
+    const raw = (await aiRes.json()).choices?.[0]?.message?.content?.trim();
+    if (!raw) return;
+
+    let parsed: { is_rfq?: boolean; items?: { raw_text: string; quantity: number | null; unit: string | null }[] };
+    try {
+      parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ''));
+    } catch {
+      this.logger.error(`RFQ detection: failed to parse LLM output: ${raw.substring(0, 200)}`);
+      return;
+    }
+    if (!parsed.is_rfq || !parsed.items?.length) return;
+
+    const { data: rfq, error: rfqErr } = await this.supabase.getAdminClient()
+      .from('rfqs')
+      .insert({
+        company_id: ctx.companyId,
+        contact_id: ctx.contactId,
+        conversation_id: ctx.conversationId,
+        status: 'draft',
+        source: 'whatsapp_text',
+        raw_message: ctx.messageText,
+      })
+      .select('id')
+      .single();
+    if (rfqErr || !rfq) {
+      this.logger.error(`RFQ insert error: ${rfqErr?.message}`);
+      return;
+    }
+
+    await this.supabase.getAdminClient().from('rfq_items').insert(
+      parsed.items.map((item) => ({
+        rfq_id: rfq.id,
+        company_id: ctx.companyId,
+        raw_text: item.raw_text,
+        quantity: item.quantity ?? null,
+        unit: item.unit ?? null,
+        status: 'needs_review',
+      })),
+    );
+
+    this.logger.log(`Detected RFQ ${rfq.id}, items: ${parsed.items.length}`);
   }
 
   private async handleStatusUpdate(status: any) {

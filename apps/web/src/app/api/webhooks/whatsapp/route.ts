@@ -291,6 +291,14 @@ async function handleIncomingMessage(
         phoneNumberId: phone_number_id,
         wasVoiceNote: type === 'audio' && !!transcript,
       }).catch((err) => console.error('[webhook] ai auto-reply error:', err));
+
+      // AI RFQ Agent — Phase 1: detect + log only, never sends anything.
+      await detectAndLogRfq({
+        companyId,
+        contactId: contact.id,
+        conversationId: conversation.id,
+        messageText: textForAutomation,
+      }).catch((err) => console.error('[webhook] rfq detection error:', err));
     }
   } else {
     console.log('[webhook] duplicate message, skipping:', msg.id);
@@ -902,7 +910,10 @@ async function callGemini(model: string, apiKey: string, systemPrompt: string, h
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents,
-        generationConfig: { maxOutputTokens: 400, temperature: 0.7 },
+        // thinkingBudget 0: newer Gemini models otherwise spend the whole maxOutputTokens
+        // budget on invisible reasoning tokens and return no text at all (finishReason
+        // MAX_TOKENS, empty content) — the bot would silently never reply.
+        generationConfig: { maxOutputTokens: 400, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
       }),
     },
   );
@@ -912,7 +923,12 @@ async function callGemini(model: string, apiKey: string, systemPrompt: string, h
     return null;
   }
   const json = await res.json();
-  return json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+  const text = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  if (!text) {
+    console.error('[ai] Gemini returned no text, finishReason:', json.candidates?.[0]?.finishReason);
+    return null;
+  }
+  return text;
 }
 
 // ── AI Auto-reply ─────────────────────────────────────────────────────────────
@@ -1040,6 +1056,76 @@ async function executeAiAutoReply(ctx: {
       .update({ last_message_at: new Date().toISOString(), last_message_preview: replyText.substring(0, 100) })
       .eq('id', ctx.conversationId);
   }
+}
+
+// ── AI RFQ Agent (Phase 1: detect + extract, log only, no send) ───────────────
+async function detectAndLogRfq(ctx: {
+  companyId: string;
+  contactId: string;
+  conversationId: string;
+  messageText: string;
+}) {
+  if (!ctx.messageText || ctx.messageText.trim().length < 3) return;
+
+  const { data: settings } = await adminSupabase
+    .from('ai_settings')
+    .select('rfq_agent_enabled')
+    .eq('company_id', ctx.companyId)
+    .maybeSingle();
+  if (!settings?.rfq_agent_enabled) return;
+
+  const apiKey = await resolveAiProviderKey(adminSupabase, 'openai');
+  if (!apiKey) return;
+
+  const systemPrompt = `You classify WhatsApp messages from B2B buyers and extract requested items when present.
+Reply with ONLY strict JSON, no prose, no markdown fences:
+{"is_rfq": boolean, "items": [{"raw_text": string, "quantity": number|null, "unit": string|null}]}
+is_rfq is true only if the customer is asking to buy/quote/price products with a quantity or clear product request. Greetings, support questions and small talk are is_rfq:false with an empty items array.`;
+
+  const raw = await callOpenAiChat('gpt-4o-mini', apiKey, [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: ctx.messageText },
+  ]);
+  if (!raw) return;
+
+  let parsed: { is_rfq?: boolean; items?: { raw_text: string; quantity: number | null; unit: string | null }[] };
+  try {
+    parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ''));
+  } catch {
+    console.error('[rfq] failed to parse LLM output:', raw.substring(0, 200));
+    return;
+  }
+  if (!parsed.is_rfq || !parsed.items?.length) return;
+
+  const { data: rfq, error: rfqErr } = await adminSupabase
+    .from('rfqs')
+    .insert({
+      company_id: ctx.companyId,
+      contact_id: ctx.contactId,
+      conversation_id: ctx.conversationId,
+      status: 'draft',
+      source: 'whatsapp_text',
+      raw_message: ctx.messageText,
+    })
+    .select('id')
+    .single();
+  if (rfqErr || !rfq) {
+    console.error('[rfq] insert error:', rfqErr?.message);
+    return;
+  }
+
+  await adminSupabase.from('rfq_items').insert(
+    parsed.items.map((item) => ({
+      rfq_id: rfq.id,
+      company_id: ctx.companyId,
+      raw_text: item.raw_text,
+      quantity: item.quantity ?? null,
+      unit: item.unit ?? null,
+      status: 'needs_review',
+    })),
+  );
+
+  console.log('[rfq] detected RFQ', rfq.id, 'items:', parsed.items.length);
 }
 
 // ── Template approval / rejection callbacks ───────────────────────────────────
