@@ -31,8 +31,32 @@ export class WooCommerceErpAdapter implements ErpAdapter {
   }
 
   async getProduct(sku: string): Promise<ErpProduct | null> {
-    const results = await this.searchProducts(sku, 1);
-    return results.find((p) => p.sku === sku) ?? results[0] ?? null;
+    // WooCommerce's `search` param (used by searchProducts) matches title/content text,
+    // not the sku field — a SKU found via name search often can't be re-confirmed that
+    // way. `sku` is a separate, exact-match filter on the same endpoint.
+    try {
+      const url = new URL(`${normalizeUrl(this.config.storeUrl)}/wp-json/wc/v3/products`);
+      url.searchParams.set('sku', sku);
+      const res = await fetch(url.toString(), { headers: this.authHeader() });
+      if (res.ok) {
+        const items = await res.json();
+        if (Array.isArray(items) && items[0]) return this.toProduct(items[0]);
+      }
+
+      // Products without an assigned WooCommerce SKU get toProduct()'s numeric-id
+      // fallback as their "sku" (so they're still pickable in the RFQ item search) —
+      // the sku= filter can never find those, so retry as a direct product-id lookup.
+      if (/^\d+$/.test(sku)) {
+        const byIdRes = await fetch(`${normalizeUrl(this.config.storeUrl)}/wp-json/wc/v3/products/${sku}`, { headers: this.authHeader() });
+        if (byIdRes.ok) {
+          const product = await byIdRes.json();
+          if (product?.id) return this.toProduct(product);
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   async searchProducts(query: string, limit = 10): Promise<ErpProduct[]> {
