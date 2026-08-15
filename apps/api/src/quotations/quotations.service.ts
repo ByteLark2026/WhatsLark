@@ -95,7 +95,29 @@ export class QuotationsService {
   }
 
   async send(companyId: string, id: string) {
+    const quote = await this.get(companyId, id);
+    if (quote.requires_approval && !quote.approved_at) {
+      throw new BadRequestException('This quotation is below the minimum margin and needs manager approval before it can be sent');
+    }
     return this.update(companyId, id, { status: 'sent', sent_at: new Date().toISOString() });
+  }
+
+  async approvePricing(companyId: string, id: string, approverId: string, note?: string) {
+    const quote = await this.get(companyId, id);
+    if (!quote.requires_approval) throw new BadRequestException('This quotation does not require pricing approval');
+
+    await this.supabase.getAdminClient()
+      .from('quotation_approvals')
+      .insert({ quotation_id: id, company_id: companyId, approver_id: approverId, status: 'approved', note });
+
+    return this.update(companyId, id, { approved_by: approverId, approved_at: new Date().toISOString() });
+  }
+
+  async rejectPricing(companyId: string, id: string, approverId: string, note?: string) {
+    await this.supabase.getAdminClient()
+      .from('quotation_approvals')
+      .insert({ quotation_id: id, company_id: companyId, approver_id: approverId, status: 'rejected', note });
+    return this.get(companyId, id);
   }
 
   async sendWhatsApp(companyId: string, userId: string, id: string) {

@@ -87,6 +87,22 @@ export class QuotationsController {
     return this.service.reject(companyId, id);
   }
 
+  @Post(':id/approve-pricing')
+  @UseGuards(JwtAuthGuard, CompanyGuard, RolesGuard)
+  @Roles('owner', 'admin', 'manager')
+  async approvePricing(@Request() req: any, @Param('id') id: string, @Body() dto: { note?: string }) {
+    const companyId = await this.getCompanyId(req.user.id);
+    return this.service.approvePricing(companyId, id, req.user.id, dto?.note);
+  }
+
+  @Post(':id/reject-pricing')
+  @UseGuards(JwtAuthGuard, CompanyGuard, RolesGuard)
+  @Roles('owner', 'admin', 'manager')
+  async rejectPricing(@Request() req: any, @Param('id') id: string, @Body() dto: { note?: string }) {
+    const companyId = await this.getCompanyId(req.user.id);
+    return this.service.rejectPricing(companyId, id, req.user.id, dto?.note);
+  }
+
   @Post(':id/convert')
   @UseGuards(JwtAuthGuard)
   async convert(@Request() req: any, @Param('id') id: string) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, Send, CheckCircle, XCircle, RefreshCw, Copy, Save, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Send, CheckCircle, XCircle, RefreshCw, Copy, Save, MessageCircle, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -138,8 +138,19 @@ export default function QuoteBuilderPage() {
     setSendingWa(false);
   };
 
+  const approvePricing = async () => {
+    try {
+      const updated = await api.post<any>(`/quotations/${id}/approve-pricing`);
+      setQuote(updated);
+      toast({ title: 'Pricing approved' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const editable = !['accepted','rejected','converted'].includes(quote?.status);
+  const pendingApproval = quote?.requires_approval && !quote?.approved_at;
 
   if (!quote) return <div className="p-8 text-center text-muted-foreground">Loading…</div>;
 
@@ -164,7 +175,18 @@ export default function QuoteBuilderPage() {
           </div>
         }
       />
-      <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
+      {pendingApproval && (
+        <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-amber-800 text-sm">
+            <ShieldAlert className="w-4 h-4 shrink-0" />
+            Below the minimum margin — needs manager approval before it can be sent.
+          </div>
+          <Button size="sm" variant="outline" className="border-amber-400 text-amber-800" onClick={approvePricing}>
+            Approve pricing
+          </Button>
+        </div>
+      )}
       <div className="bg-white border rounded-xl p-4 sm:p-6 space-y-6">
         <div className="flex items-center gap-3">
           <Badge className={cn('text-xs', STATUS_STYLES[quote.status])}>{quote.status}</Badge>

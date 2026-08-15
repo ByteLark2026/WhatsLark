@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../common/supabase.service';
 import { QuotationsService } from '../quotations/quotations.service';
+import { PricingRulesService } from './pricing-rules.service';
 import { LineItem } from '../invoices/invoices.service';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class RfqService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly quotations: QuotationsService,
+    private readonly pricingRules: PricingRulesService,
   ) {}
 
   async list(companyId: string, opts: { status?: string; page?: number; limit?: number } = {}) {
@@ -98,12 +100,29 @@ export class RfqService {
       throw new BadRequestException(`Resolve ${unresolved.length} unmatched item(s) before generating a quote`);
     }
 
+    const rules = await this.pricingRules.get(companyId);
+    let requiresApproval = false;
+
     const lineItems: LineItem[] = rfq.items.map((item: any, idx: number) => {
       const qty = item.quantity ?? 1;
       const unitPrice = item.product_catalog?.standard_price ?? 0;
+      const cost = item.product_catalog?.cost ?? null;
+      const name = item.product_catalog?.name || item.raw_text;
+
+      // Hard guardrail: never let a quote leave below cost, regardless of who generated it.
+      if (rules.below_cost_block && cost != null && unitPrice < cost) {
+        throw new BadRequestException(`"${name}" is priced below cost (${unitPrice} < ${cost}) — blocked by pricing guardrails`);
+      }
+      // Soft guardrail: below the configured minimum margin flags the quote for manager approval
+      // instead of blocking it outright — the standard price itself may just be thin on this SKU.
+      if (cost != null && unitPrice > 0) {
+        const marginPct = ((unitPrice - cost) / unitPrice) * 100;
+        if (marginPct < rules.min_margin_pct) requiresApproval = true;
+      }
+
       return {
         id: String(idx + 1),
-        description: `${item.product_catalog?.name || item.raw_text}${item.unit ? ` (${item.unit})` : ''}`,
+        description: `${name}${item.unit ? ` (${item.unit})` : ''}`,
         qty,
         unit_price: unitPrice,
         amount: qty * unitPrice,
@@ -117,11 +136,16 @@ export class RfqService {
     });
 
     await this.supabase.getAdminClient()
+      .from('quotations')
+      .update({ rfq_id: rfqId, requires_approval: requiresApproval })
+      .eq('id', quotation.id);
+
+    await this.supabase.getAdminClient()
       .from('rfqs')
       .update({ status: 'quoted' })
       .eq('id', rfqId)
       .eq('company_id', companyId);
 
-    return quotation;
+    return { ...quotation, rfq_id: rfqId, requires_approval: requiresApproval };
   }
 }
