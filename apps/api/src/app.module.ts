@@ -33,6 +33,7 @@ import { VoiceModule } from './voice/voice.module';
 import { AiPosterModule } from './ai-poster/ai-poster.module';
 import { BillingModule } from './billing/billing.module';
 import { ErpModule } from './integrations/erp/erp.module';
+import { RfqModule } from './rfq/rfq.module';
 
 @Module({
   controllers: [AppController],
@@ -83,6 +84,7 @@ import { ErpModule } from './integrations/erp/erp.module';
     AiPosterModule,
     BillingModule,
     ErpModule,
+    RfqModule,
   ],
 })
 export class AppModule {}
