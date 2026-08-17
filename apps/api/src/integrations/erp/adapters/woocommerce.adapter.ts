@@ -70,20 +70,18 @@ export class WooCommerceErpAdapter implements ErpAdapter {
   }
 
   // WooCommerce's `search` param ANDs every word against title/content — a query like
-  // "surgical masks" returns nothing if no product title contains "surgical", even though
-  // "masks" alone would match. Fall back to searching each significant word separately and
-  // merge the results, so one off-catalog word doesn't zero out the whole query.
+  // "surgical masks" can return nothing (if no title contains "surgical") or, worse,
+  // return only a weakly-relevant product while a stronger match sits under a single
+  // word like "masks". Always merge whole-phrase + per-word results into one candidate
+  // pool and let the caller's own similarity scoring pick the best one, rather than
+  // trusting whichever query variant happened to return first.
   async searchProducts(query: string, limit = 10): Promise<ErpProduct[]> {
     try {
-      const whole = await this.searchOnce(query, limit);
-      if (whole.length > 0) return whole;
-
       const words = query.split(/\s+/).filter((w) => w.length > 2);
-      if (words.length < 2) return [];
-
-      const perWord = await Promise.all(words.map((w) => this.searchOnce(w, limit).catch(() => [])));
+      const queries = words.length >= 2 ? [query, ...words] : [query];
+      const results = await Promise.all(queries.map((q) => this.searchOnce(q, limit).catch(() => [])));
       const merged = new Map<string, ErpProduct>();
-      for (const list of perWord) for (const p of list) merged.set(p.sku, p);
+      for (const list of results) for (const p of list) merged.set(p.sku, p);
       return Array.from(merged.values()).slice(0, limit);
     } catch {
       return [];
