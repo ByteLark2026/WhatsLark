@@ -185,7 +185,7 @@ export default function TermsPage() {
             <div className="mt-3 p-4 bg-gray-50 rounded-lg">
               <p className="font-medium text-gray-900">WhatsLark / ByteLark</p>
               <p className="mt-1">Email: <a href="mailto:hello@bytelark.net" className="text-green-600 underline">hello@bytelark.net</a></p>
-              <p>Website: <a href="https://whats-lark.vercel.app" className="text-green-600 underline">whats-lark.vercel.app</a></p>
+              <p>Website: <a href="https://larkflow.io" className="text-green-600 underline">larkflow.io</a></p>
             </div>
           </section>
 

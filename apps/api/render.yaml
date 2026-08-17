@@ -10,7 +10,7 @@ services:
       - key: API_PORT
         value: 3001
       - key: NEXT_PUBLIC_APP_URL
-        value: https://whats-lark.vercel.app
+        value: https://larkflow.io
       - key: SUPABASE_URL
         fromDatabase: false
         sync: false

@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     env: envCheck,
-    webhook_url: 'https://whats-lark.vercel.app/api/webhooks/whatsapp',
+    webhook_url: 'https://larkflow.io/api/webhooks/whatsapp',
     companies: (companies || []).map(c => ({
       id: c.id,
       name: c.name,
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
 
   // Call the actual webhook handler
   const webhookRes = await fetch(
-    `${process.env.NEXT_PUBLIC_APP_URL || 'https://whats-lark.vercel.app'}/api/webhooks/whatsapp`,
+    `${process.env.NEXT_PUBLIC_APP_URL || 'https://larkflow.io'}/api/webhooks/whatsapp`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
