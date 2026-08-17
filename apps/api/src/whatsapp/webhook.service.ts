@@ -3,6 +3,8 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { SupabaseService } from '../common/supabase.service';
 import { WhatsAppService } from './whatsapp.service';
 import { resolveAiProviderKey } from '../common/ai-key.util';
+import { RfqService } from '../rfq/rfq.service';
+import { ErpAdapterFactory } from '../integrations/erp/erp-adapter.factory';
 
 const GRAPH_VERSION = process.env.WHATSAPP_API_VERSION || 'v21.0';
 
@@ -26,6 +28,8 @@ export class WhatsAppWebhookService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly whatsapp: WhatsAppService,
+    private readonly rfqService: RfqService,
+    private readonly erpAdapters: ErpAdapterFactory,
   ) {}
 
   async verifyToken(token: string): Promise<boolean> {
@@ -330,6 +334,25 @@ is_rfq is true only if the customer is asking to buy/quote/price products with a
     await this.supabase.getAdminClient().from('rfq_items').insert(itemRows);
 
     this.logger.log(`Detected RFQ ${rfq.id}, items: ${parsed.items.length}`);
+
+    // Auto-quote: fires only when every item matched at or above the company's
+    // configured confidence floor. generateQuote still enforces that every matched_sku
+    // resolves in the connected ERP, so this safely no-ops (falls through to human
+    // review) if a match doesn't hold up.
+    const { data: quoteSettings } = await this.supabase.getAdminClient()
+      .from('ai_settings')
+      .select('rfq_auto_quote_confidence')
+      .eq('company_id', ctx.companyId)
+      .maybeSingle();
+    const threshold = Number(quoteSettings?.rfq_auto_quote_confidence) || 0;
+    if (threshold > 0 && itemRows.every((r) => r.status !== 'unmatched' && (r.confidence ?? 0) >= threshold)) {
+      try {
+        await this.rfqService.generateQuote(ctx.companyId, null, rfq.id);
+        this.logger.log(`Auto-quoted RFQ ${rfq.id}`);
+      } catch (err: any) {
+        this.logger.error(`Auto-quote failed for RFQ ${rfq.id}: ${err.message}`);
+      }
+    }
   }
 
   // Fuzzy text match only — LLM/embeddings are not the source of truth for SKU,
@@ -351,6 +374,21 @@ is_rfq is true only if the customer is asking to buy/quote/price products with a
     return dp[a.length][b.length];
   }
 
+  /** Fraction of the query's words that appear (exactly, or as a substring in either
+   *  direction for words of 3+ chars) somewhere in the candidate's words. Whole-string
+   *  Levenshtein alone falls apart for a short query against a long real-world product
+   *  title — this handles that case, while whole-string similarity still handles
+   *  near-identical short names well. */
+  private tokenCoverage(query: string, candidate: string): number {
+    const qWords = this.normalizeForMatch(query).split(' ').filter(Boolean);
+    const cWords = this.normalizeForMatch(candidate).split(' ').filter(Boolean);
+    if (!qWords.length || !cWords.length) return 0;
+    const matched = qWords.filter((qw) => cWords.some((cw) =>
+      qw === cw || (qw.length >= 3 && cw.includes(qw)) || (cw.length >= 3 && qw.includes(cw)),
+    ));
+    return (matched.length / qWords.length) * 100;
+  }
+
   private textSimilarity(a: string, b: string): number {
     const na = this.normalizeForMatch(a);
     const nb = this.normalizeForMatch(b);
@@ -358,10 +396,26 @@ is_rfq is true only if the customer is asking to buy/quote/price products with a
     const maxLen = Math.max(na.length, nb.length);
     let score = maxLen ? (1 - this.levenshtein(na, nb) / maxLen) * 100 : 0;
     if (na.includes(nb) || nb.includes(na)) score = Math.max(score, 90);
-    return score;
+    return Math.max(score, this.tokenCoverage(a, b));
   }
 
-  private async matchRfqItemToCatalog(companyId: string, rawText: string): Promise<{ productId: string; sku: string; confidence: number } | null> {
+  /** ERP connected -> search its live catalog exclusively (matches the authority rule
+   *  RfqService.generateQuote enforces: manual product_catalog is ignored once an ERP
+   *  is connected, so matching against it here would only ever produce a "match" that
+   *  quote generation refuses later). No ERP -> local product_catalog. */
+  private async matchRfqItemToCatalog(companyId: string, rawText: string): Promise<{ productId: string | null; sku: string; confidence: number } | null> {
+    const adapter = await this.erpAdapters.getAdapter(companyId).catch(() => null);
+    if (adapter) {
+      const results = await adapter.searchProducts(rawText, 20).catch(() => []);
+      if (!results.length) return null;
+      let best: { productId: null; sku: string; confidence: number } | null = null;
+      for (const p of results) {
+        const score = this.textSimilarity(rawText, p.name);
+        if (!best || score > best.confidence) best = { productId: null, sku: p.sku, confidence: Math.round(score * 100) / 100 };
+      }
+      return best;
+    }
+
     const { data: products } = await this.supabase.getAdminClient()
       .from('product_catalog')
       .select('id, sku, name, aliases')

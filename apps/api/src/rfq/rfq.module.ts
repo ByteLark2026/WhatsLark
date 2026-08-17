@@ -18,5 +18,6 @@ import { InternalRfqController } from './internal-rfq.controller';
   // GET /rfq/pricing-rules (id='products'/'pricing-rules') if it registered first.
   controllers: [PricingRulesController, ProductCatalogController, InternalRfqController, RfqController],
   providers: [RfqService, PricingRulesService, RfqFollowUpService, ProductCatalogService],
+  exports: [RfqService],
 })
 export class RfqModule {}
