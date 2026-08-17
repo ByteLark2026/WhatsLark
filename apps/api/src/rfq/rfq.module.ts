@@ -10,14 +10,16 @@ import { RfqFollowUpService } from './rfq-followup.service';
 import { ProductCatalogController } from './product-catalog.controller';
 import { ProductCatalogService } from './product-catalog.service';
 import { InternalRfqController } from './internal-rfq.controller';
+import { ProductAliasController } from './product-alias.controller';
+import { ProductAliasService } from './product-alias.service';
 
 @Module({
   imports: [SupabaseModule, QuotationsModule, ErpModule],
   // Order matters: Nest/Express matches routes in registration order, and RfqController's
   // GET /rfq/:id would otherwise swallow literal-path siblings like GET /rfq/products or
   // GET /rfq/pricing-rules (id='products'/'pricing-rules') if it registered first.
-  controllers: [PricingRulesController, ProductCatalogController, InternalRfqController, RfqController],
-  providers: [RfqService, PricingRulesService, RfqFollowUpService, ProductCatalogService],
-  exports: [RfqService],
+  controllers: [PricingRulesController, ProductCatalogController, ProductAliasController, InternalRfqController, RfqController],
+  providers: [RfqService, PricingRulesService, RfqFollowUpService, ProductCatalogService, ProductAliasService],
+  exports: [RfqService, ProductAliasService],
 })
 export class RfqModule {}

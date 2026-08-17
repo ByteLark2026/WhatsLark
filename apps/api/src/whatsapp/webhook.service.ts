@@ -407,19 +407,42 @@ is_rfq is true only if the customer is asking to buy/quote/price products with a
     return Math.max(score, this.tokenCoverage(a, b));
   }
 
+  /** AI-generated (or manually learned) customer search terms per SKU — bridges
+   *  wording gaps ("surgical masks" -> "LOMAR Face Mask 3Ply...") the ERP/catalog's own
+   *  product text doesn't cover. Checked alongside both matching paths below. */
+  private async bestAliasMatch(companyId: string, rawText: string): Promise<{ sku: string; confidence: number } | null> {
+    const { data: aliases } = await this.supabase.getAdminClient()
+      .from('product_aliases')
+      .select('sku, alias')
+      .eq('company_id', companyId);
+    if (!aliases?.length) return null;
+
+    let best: { sku: string; confidence: number } | null = null;
+    for (const row of aliases) {
+      const score = this.textSimilarity(rawText, row.alias);
+      if (!best || score > best.confidence) best = { sku: row.sku, confidence: Math.round(score * 100) / 100 };
+    }
+    return best;
+  }
+
   /** ERP connected -> search its live catalog exclusively (matches the authority rule
    *  RfqService.generateQuote enforces: manual product_catalog is ignored once an ERP
    *  is connected, so matching against it here would only ever produce a "match" that
-   *  quote generation refuses later). No ERP -> local product_catalog. */
+   *  quote generation refuses later). No ERP -> local product_catalog. Either way, also
+   *  checked against the company's product_aliases for customer-wording gaps. */
   private async matchRfqItemToCatalog(companyId: string, rawText: string): Promise<{ productId: string | null; sku: string; confidence: number } | null> {
+    const aliasMatch = await this.bestAliasMatch(companyId, rawText).catch(() => null);
+
     const adapter = await this.erpAdapters.getAdapter(companyId).catch(() => null);
     if (adapter) {
       const results = await adapter.searchProducts(rawText, 20).catch(() => []);
-      if (!results.length) return null;
       let best: { productId: null; sku: string; confidence: number } | null = null;
       for (const p of results) {
         const score = this.textSimilarity(rawText, p.name);
         if (!best || score > best.confidence) best = { productId: null, sku: p.sku, confidence: Math.round(score * 100) / 100 };
+      }
+      if (aliasMatch && (!best || aliasMatch.confidence > best.confidence)) {
+        best = { productId: null, sku: aliasMatch.sku, confidence: aliasMatch.confidence };
       }
       return best;
     }
@@ -429,13 +452,16 @@ is_rfq is true only if the customer is asking to buy/quote/price products with a
       .select('id, sku, name, aliases')
       .eq('company_id', companyId)
       .eq('is_active', true);
-    if (!products?.length) return null;
 
-    let best: { productId: string; sku: string; confidence: number } | null = null;
-    for (const p of products) {
+    let best: { productId: string | null; sku: string; confidence: number } | null = null;
+    for (const p of products || []) {
       const candidates = [p.name, ...(p.aliases || [])];
       const score = Math.max(...candidates.map((c: string) => this.textSimilarity(rawText, c)));
       if (!best || score > best.confidence) best = { productId: p.id, sku: p.sku, confidence: Math.round(score * 100) / 100 };
+    }
+    if (aliasMatch && (!best || aliasMatch.confidence > best.confidence)) {
+      const owner = (products || []).find((p) => p.sku === aliasMatch.sku);
+      best = { productId: owner?.id ?? null, sku: aliasMatch.sku, confidence: aliasMatch.confidence };
     }
     return best;
   }
