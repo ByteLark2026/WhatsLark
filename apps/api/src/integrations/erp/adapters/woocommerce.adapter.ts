@@ -59,15 +59,32 @@ export class WooCommerceErpAdapter implements ErpAdapter {
     }
   }
 
+  private async searchOnce(search: string, limit: number): Promise<ErpProduct[]> {
+    const url = new URL(`${normalizeUrl(this.config.storeUrl)}/wp-json/wc/v3/products`);
+    url.searchParams.set('search', search);
+    url.searchParams.set('per_page', String(limit));
+    const res = await fetch(url.toString(), { headers: this.authHeader() });
+    if (!res.ok) return [];
+    const items = await res.json();
+    return Array.isArray(items) ? items.map((item: any) => this.toProduct(item)) : [];
+  }
+
+  // WooCommerce's `search` param ANDs every word against title/content — a query like
+  // "surgical masks" returns nothing if no product title contains "surgical", even though
+  // "masks" alone would match. Fall back to searching each significant word separately and
+  // merge the results, so one off-catalog word doesn't zero out the whole query.
   async searchProducts(query: string, limit = 10): Promise<ErpProduct[]> {
     try {
-      const url = new URL(`${normalizeUrl(this.config.storeUrl)}/wp-json/wc/v3/products`);
-      url.searchParams.set('search', query);
-      url.searchParams.set('per_page', String(limit));
-      const res = await fetch(url.toString(), { headers: this.authHeader() });
-      if (!res.ok) return [];
-      const items = await res.json();
-      return Array.isArray(items) ? items.map((item: any) => this.toProduct(item)) : [];
+      const whole = await this.searchOnce(query, limit);
+      if (whole.length > 0) return whole;
+
+      const words = query.split(/\s+/).filter((w) => w.length > 2);
+      if (words.length < 2) return [];
+
+      const perWord = await Promise.all(words.map((w) => this.searchOnce(w, limit).catch(() => [])));
+      const merged = new Map<string, ErpProduct>();
+      for (const list of perWord) for (const p of list) merged.set(p.sku, p);
+      return Array.from(merged.values()).slice(0, limit);
     } catch {
       return [];
     }
