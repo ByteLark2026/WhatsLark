@@ -245,12 +245,14 @@ export class WhatsAppWebhookService {
       // AI RFQ Agent — Phase 1: detect + log only, never sends anything.
       await this.detectAndLogRfq({
         companyId, contactId: contact.id, conversationId: conversation.id, messageText: content,
+        channelId: channel.id, contactPhone: phone,
       }).catch((err) => this.logger.error('RFQ detection error', err));
     }
   }
 
   private async detectAndLogRfq(ctx: {
     companyId: string; contactId: string; conversationId: string; messageText: string;
+    channelId: string; contactPhone: string;
   }) {
     if (!ctx.messageText || ctx.messageText.trim().length < 3) return;
 
@@ -334,6 +336,26 @@ is_rfq is true only if the customer is asking to buy/quote/price products with a
     await this.supabase.getAdminClient().from('rfq_items').insert(itemRows);
 
     this.logger.log(`Detected RFQ ${rfq.id}, items: ${parsed.items.length}`);
+
+    // Items the matcher genuinely couldn't resolve (not just below auto-quote
+    // confidence — no usable candidate at all) need a human, not silence. Flag the RFQ
+    // for review and tell the customer someone will follow up, instead of leaving them
+    // hanging on a request the AI can't quote itself.
+    if (itemRows.some((r) => r.status === 'unmatched')) {
+      await this.supabase.getAdminClient()
+        .from('rfqs')
+        .update({ status: 'awaiting_review' })
+        .eq('id', rfq.id);
+      try {
+        await this.whatsapp.sendTextMessage(
+          ctx.channelId,
+          ctx.contactPhone,
+          "Thanks for the details — one of our representatives will review your request and get back to you shortly with pricing.",
+        );
+      } catch (err: any) {
+        this.logger.error(`Unmatched-RFQ customer notice failed for RFQ ${rfq.id}: ${err.message}`);
+      }
+    }
 
     // Auto-quote: fires only when every item matched at or above the company's
     // configured confidence floor. generateQuote still enforces that every matched_sku
