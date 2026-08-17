@@ -60,6 +60,31 @@ export default function TemplatesPage() {
 
   const closeEdit = () => setEditTarget(null);
 
+  // Submits a just-created/edited row to Meta right away — a template sitting in our DB
+  // with status='pending' but no wa_template_id was never actually sent to Meta, so it
+  // would stay "pending" forever with no approval ever arriving. Reuses the same
+  // /api/templates/submit path as the manual "Submit for review" action.
+  const submitToMeta = async (templateId: string): Promise<MessageTemplate | null> => {
+    if (!company?.id) return null;
+    try {
+      const res = await fetch('/api/templates/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_id: templateId, company_id: company.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: 'Meta submission failed', description: data.message, variant: 'destructive' });
+        return null;
+      }
+      toast({ title: 'Template submitted to Meta for review' });
+      return data as unknown as MessageTemplate;
+    } catch (err: any) {
+      toast({ title: 'Meta submission failed', description: err.message, variant: 'destructive' });
+      return null;
+    }
+  };
+
   const handleAdd = async (data: { name: string; channel_id: string; language: string; category: string; components: TemplateComponent[] }) => {
     if (!company?.id) return;
     setSaving(true);
@@ -79,13 +104,16 @@ export default function TemplatesPage() {
       .single();
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      setTemplates((prev) => [created as unknown as MessageTemplate, ...prev]);
-      setShowAdd(false);
-      setDuplicateSource(null);
-      toast({ title: 'Template created — pending approval' });
+      setSaving(false);
+      return;
     }
+    setTemplates((prev) => [created as unknown as MessageTemplate, ...prev]);
+    setShowAdd(false);
+    setDuplicateSource(null);
     setSaving(false);
+
+    const submitted = await submitToMeta(created.id);
+    if (submitted) setTemplates((prev) => prev.map((t) => t.id === submitted.id ? submitted : t));
   };
 
   const handleEdit = async (data: { name: string; channel_id: string; language: string; category: string; components: TemplateComponent[] }) => {
@@ -107,12 +135,15 @@ export default function TemplatesPage() {
       .single();
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      setTemplates((prev) => prev.map((t) => t.id === editTarget.id ? updated as unknown as MessageTemplate : t));
-      closeEdit();
-      toast({ title: 'Template updated — pending re-approval' });
+      setSaving(false);
+      return;
     }
+    setTemplates((prev) => prev.map((t) => t.id === editTarget.id ? updated as unknown as MessageTemplate : t));
+    closeEdit();
     setSaving(false);
+
+    const submitted = await submitToMeta(updated.id);
+    if (submitted) setTemplates((prev) => prev.map((t) => t.id === submitted.id ? submitted : t));
   };
 
   // "Duplicate for another channel" — same name and content are fine across channels
