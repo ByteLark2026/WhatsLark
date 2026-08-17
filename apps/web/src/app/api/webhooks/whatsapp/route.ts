@@ -1129,6 +1129,7 @@ async function matchRfqItemToCatalog(companyId: string, rawText: string): Promis
             const score = textSimilarity(rawText, p.name);
             if (!best || score > best.confidence) best = { productId: null, sku: p.sku, confidence: Math.round(score * 100) / 100 };
           }
+          console.log('[rfq] match:', { raw_text: rawText, source: 'erp', best_sku: best?.sku, confidence: best?.confidence, candidates: results.length });
           return best;
         }
         // connected:false — no ERP configured, fall through to product_catalog below.
@@ -1155,6 +1156,7 @@ async function matchRfqItemToCatalog(companyId: string, rawText: string): Promis
     const score = Math.max(...candidates.map((c: string) => textSimilarity(rawText, c)));
     if (!best || score > best.confidence) best = { productId: p.id, sku: p.sku, confidence: Math.round(score * 100) / 100 };
   }
+  console.log('[rfq] match:', { raw_text: rawText, source: 'product_catalog', best_sku: best?.sku, confidence: best?.confidence, candidates: products.length });
   return best;
 }
 
