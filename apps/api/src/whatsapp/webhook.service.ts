@@ -316,7 +316,7 @@ is_rfq is true only if the customer is asking to buy/quote/price products with a
     }
 
     const itemRows = await Promise.all(parsed.items.map(async (item) => {
-      const match = await this.matchRfqItemToCatalog(ctx.companyId, item.raw_text);
+      const match = await this.matchRfqItemToCatalog(ctx.companyId, this.stripQtyPrefix(item.raw_text));
       const status = !match ? 'unmatched' : match.confidence >= 95 ? 'auto_matched' : match.confidence >= 80 ? 'needs_review' : 'unmatched';
       return {
         rfq_id: rfq.id,
@@ -357,6 +357,14 @@ is_rfq is true only if the customer is asking to buy/quote/price products with a
 
   // Fuzzy text match only — LLM/embeddings are not the source of truth for SKU,
   // structured catalogue data is. Levenshtein-ratio scoring is enough for MVP.
+  // The extraction LLM is supposed to split quantity/unit out of raw_text, but
+  // sometimes leaves it inline (e.g. "20 boxes of surgical masks") — that noise drags
+  // down similarity scoring since "boxes"/"of" match nothing in the catalog. Strip a
+  // leading quantity+unit(+"of") pattern defensively before matching.
+  private stripQtyPrefix(raw: string): string {
+    return raw.replace(/^\s*\d+(\.\d+)?\s*([a-z]+\s+)?(of\s+)?/i, '').trim() || raw;
+  }
+
   private normalizeForMatch(s: string): string {
     return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   }
