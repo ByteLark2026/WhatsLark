@@ -91,7 +91,7 @@ export class WhatsAppWebhookService {
       this.logger.log(`Webhook received: ${JSON.stringify(body).substring(0, 300)}`);
       for (const entry of body?.entry ?? []) {
         for (const change of entry?.changes ?? []) {
-          await this.routeChange(change).catch((err) => this.logger.error('Webhook change processing error', err));
+          await this.routeChange(change, entry?.id).catch((err) => this.logger.error('Webhook change processing error', err));
         }
       }
     } catch (err) {
@@ -106,13 +106,15 @@ export class WhatsAppWebhookService {
    *  naming convention and are NOT verified against current docs — the default branch
    *  logs the raw field name so real payloads can correct them once a coexistence
    *  channel is actually connected and traffic is observed. */
-  private async routeChange(change: { field?: string; value?: any }) {
+  private async routeChange(change: { field?: string; value?: any }, wabaId?: string) {
     const { field, value } = change || {};
     if (!value) return;
 
     switch (field) {
       case 'messages':
         return this.processMessagesChange(value);
+      case 'message_template_status_update':
+        return this.handleTemplateStatusUpdate(value, wabaId);
       case 'smb_message_echoes':
         return this.processEchoChange(value);
       case 'history':
@@ -121,6 +123,59 @@ export class WhatsAppWebhookService {
         return this.processContactsSyncChange(value);
       default:
         this.logger.log(`Unhandled webhook field: ${field} — payload: ${JSON.stringify(value).slice(0, 500)}`);
+    }
+  }
+
+  /** Meta calls this when a template's review status changes (approved/rejected/etc).
+   *  This is the ONLY place template status updates are processed — Meta's real
+   *  webhook traffic lands here (apps/api), not the separate apps/web Next.js route
+   *  that has a similarly-named handler but never receives production traffic. */
+  private async handleTemplateStatusUpdate(value: any, wabaId?: string) {
+    const templateId = value?.message_template_id?.toString();
+    const name = value?.message_template_name;
+    const language = value?.message_template_language;
+    const status = this.mapMetaTemplateStatus(value?.event);
+    if (!templateId || !name) return;
+
+    let companyIds: string[] | null = null;
+    if (wabaId) {
+      const { data: channels } = await this.supabase.getAdminClient()
+        .from('whatsapp_channels')
+        .select('company_id')
+        .eq('business_account_id', wabaId);
+      companyIds = (channels ?? []).map((c: any) => c.company_id);
+    }
+
+    // Match by wa_template_id first (most reliable).
+    let q = this.supabase.getAdminClient()
+      .from('message_templates')
+      .update({ status })
+      .eq('wa_template_id', templateId);
+    if (companyIds?.length) q = q.in('company_id', companyIds);
+    const { data: byId } = await q.select('id');
+    if (byId && byId.length > 0) return;
+
+    // Fall back to name+language match and backfill the id for future updates.
+    let fb = this.supabase.getAdminClient()
+      .from('message_templates')
+      .update({ status, wa_template_id: templateId })
+      .eq('name', name)
+      .eq('language', language);
+    if (companyIds?.length) fb = fb.in('company_id', companyIds);
+    await fb;
+  }
+
+  private mapMetaTemplateStatus(event?: string): 'pending' | 'approved' | 'rejected' {
+    switch ((event ?? '').toUpperCase()) {
+      case 'APPROVED':
+        return 'approved';
+      case 'REJECTED':
+      case 'DISABLED':
+      case 'PAUSED':
+      case 'FLAGGED':
+        return 'rejected';
+      default:
+        return 'pending';
     }
   }
 
