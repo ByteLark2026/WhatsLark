@@ -29,7 +29,7 @@ export class WhatsAppController {
   @Post('embedded-signup')
   completeEmbeddedSignup(
     @CurrentUser('id') userId: string,
-    @Body() dto: { code: string; phone_number_id: string; waba_id: string },
+    @Body() dto: { code: string; phone_number_id: string; waba_id: string; connection_mode?: 'api_only' | 'coexistence' },
   ) {
     return this.whatsapp.completeEmbeddedSignup(userId, dto);
   }

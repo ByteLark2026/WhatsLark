@@ -52,7 +52,17 @@ export class WhatsAppWebhookService {
    * before they start silently dropping inbound traffic.
    */
   async verifySignature(body: any, rawBody: Buffer | undefined, signatureHeader: string | undefined): Promise<boolean> {
-    const phoneNumberId: string | undefined = body?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+    // Coexistence payloads can carry multiple changes per entry (messages, echoes, history,
+    // contact sync) — the first one isn't guaranteed to be a `messages`-shaped change with
+    // metadata, so walk all of them for the first phone_number_id found.
+    let phoneNumberId: string | undefined;
+    for (const entry of body?.entry ?? []) {
+      for (const change of entry?.changes ?? []) {
+        phoneNumberId = change?.value?.metadata?.phone_number_id;
+        if (phoneNumberId) break;
+      }
+      if (phoneNumberId) break;
+    }
     if (!phoneNumberId) return true; // no message payload to forge (e.g. test pings) — let processWebhook's own checks handle it
 
     const channel = await this.whatsapp.getChannelByPhoneNumberId(phoneNumberId);
@@ -79,39 +89,229 @@ export class WhatsAppWebhookService {
   async processWebhook(body: any) {
     try {
       this.logger.log(`Webhook received: ${JSON.stringify(body).substring(0, 300)}`);
-      const entry = body?.entry?.[0];
-      const changes = entry?.changes?.[0];
-      const value = changes?.value;
-
-      if (!value) {
-        this.logger.warn('Webhook: no value in payload');
-        return;
-      }
-
-      const phoneNumberId: string = value.metadata?.phone_number_id;
-      this.logger.log(`Webhook phone_number_id: ${phoneNumberId}`);
-      const channel = await this.whatsapp.getChannelByPhoneNumberId(phoneNumberId);
-      if (!channel) {
-        this.logger.warn(`No channel found for phone_number_id: ${phoneNumberId}`);
-        return;
-      }
-
-      // Handle incoming messages
-      if (value.messages?.length) {
-        for (const msg of value.messages) {
-          await this.handleIncomingMessage(channel, msg, value.contacts?.[0]);
-        }
-      }
-
-      // Handle status updates
-      if (value.statuses?.length) {
-        for (const status of value.statuses) {
-          await this.handleStatusUpdate(status);
+      for (const entry of body?.entry ?? []) {
+        for (const change of entry?.changes ?? []) {
+          await this.routeChange(change).catch((err) => this.logger.error('Webhook change processing error', err));
         }
       }
     } catch (err) {
       this.logger.error('Webhook processing error', err);
     }
+  }
+
+  /** Dispatches a single webhook change by its `field`. Standard traffic is always
+   *  `messages`; coexistence-connected channels can also deliver echoes of messages the
+   *  customer sent from the WhatsApp Business App itself, bulk chat-history sync, and
+   *  contact sync. Field names for those three are our best guess at Meta's `smb_*`
+   *  naming convention and are NOT verified against current docs — the default branch
+   *  logs the raw field name so real payloads can correct them once a coexistence
+   *  channel is actually connected and traffic is observed. */
+  private async routeChange(change: { field?: string; value?: any }) {
+    const { field, value } = change || {};
+    if (!value) return;
+
+    switch (field) {
+      case 'messages':
+        return this.processMessagesChange(value);
+      case 'smb_message_echoes':
+        return this.processEchoChange(value);
+      case 'history':
+        return this.processHistoryChange(value);
+      case 'smb_app_state_sync':
+        return this.processContactsSyncChange(value);
+      default:
+        this.logger.log(`Unhandled webhook field: ${field} — payload: ${JSON.stringify(value).slice(0, 500)}`);
+    }
+  }
+
+  private async processMessagesChange(value: any) {
+    const phoneNumberId: string = value.metadata?.phone_number_id;
+    this.logger.log(`Webhook phone_number_id: ${phoneNumberId}`);
+    const channel = await this.whatsapp.getChannelByPhoneNumberId(phoneNumberId);
+    if (!channel) {
+      this.logger.warn(`No channel found for phone_number_id: ${phoneNumberId}`);
+      return;
+    }
+
+    if (value.messages?.length) {
+      for (const msg of value.messages) {
+        await this.handleIncomingMessage(channel, msg, value.contacts?.[0]);
+      }
+    }
+
+    if (value.statuses?.length) {
+      for (const status of value.statuses) {
+        await this.handleStatusUpdate(status);
+      }
+    }
+  }
+
+  /** A message the customer sent themselves from the WhatsApp Business App, mirrored to
+   *  us so it shows up in the same conversation instead of going unseen. Recorded as
+   *  outbound (the business sent it, just not through WhatsLark) and tagged sent_via so
+   *  the inbox can label it. Which field holds the echoed messages, and which of
+   *  from/to is the customer vs. the business number in that shape, is unverified —
+   *  correct against real payloads once observed. */
+  private async processEchoChange(value: any) {
+    const phoneNumberId: string = value.metadata?.phone_number_id;
+    const channel = await this.whatsapp.getChannelByPhoneNumberId(phoneNumberId);
+    if (!channel) {
+      this.logger.warn(`No channel found for phone_number_id: ${phoneNumberId}`);
+      return;
+    }
+    const echoes = value.message_echoes || value.messages || [];
+    for (const msg of echoes) {
+      await this.handleOutboundEcho(channel, msg).catch((err) => this.logger.error('Echo handling error', err));
+    }
+  }
+
+  private async handleOutboundEcho(channel: any, msg: any) {
+    const phone = msg.to || msg.from;
+    if (!phone) return;
+    const companyId = channel.company_id;
+
+    const { data: contact } = await this.supabase.getAdminClient()
+      .from('contacts')
+      .upsert(
+        { company_id: companyId, phone, name: phone, last_seen_at: new Date().toISOString() },
+        { onConflict: 'company_id,phone' },
+      )
+      .select()
+      .single();
+    if (!contact) return;
+
+    const { data: existingMsg } = await this.supabase.getAdminClient()
+      .from('messages')
+      .select('id')
+      .eq('wa_message_id', msg.id)
+      .maybeSingle();
+    if (existingMsg) return;
+
+    const { conversation } = await this.findOrCreateConversation(companyId, contact.id, channel.id);
+    const extracted = this.extractContent(msg);
+
+    await this.supabase.getAdminClient()
+      .from('messages')
+      .insert({
+        conversation_id: conversation.id,
+        company_id: companyId,
+        channel_id: channel.id,
+        direction: 'outbound',
+        type: extracted.type,
+        content: extracted.content,
+        media_url: extracted.mediaUrl,
+        status: 'sent',
+        wa_message_id: msg.id,
+        is_note: false,
+        sent_via: 'business_app',
+        metadata: msg,
+      });
+
+    await this.supabase.getAdminClient()
+      .from('conversations')
+      .update({ last_message_at: new Date().toISOString(), last_message_preview: extracted.content.substring(0, 100) })
+      .eq('id', conversation.id);
+  }
+
+  /** Bulk historical messages Meta syncs in on first connecting a coexistence channel
+   *  (up to ~6 months). Uses a lean insert path — no automations/AI auto-reply/RFQ
+   *  detection, since those only make sense for live incoming traffic, not backfilled
+   *  history. Payload shape (a flat array of message-like objects under `value.messages`
+   *  or `value.history`) is unverified — correct against real payloads once observed. */
+  private async processHistoryChange(value: any) {
+    const phoneNumberId: string = value.metadata?.phone_number_id;
+    const channel = await this.whatsapp.getChannelByPhoneNumberId(phoneNumberId);
+    if (!channel) {
+      this.logger.warn(`No channel found for phone_number_id: ${phoneNumberId}`);
+      return;
+    }
+    const items: any[] = value.history || value.messages || [];
+    const batchSize = 20;
+    for (let i = 0; i < items.length; i += batchSize) {
+      await Promise.all(
+        items.slice(i, i + batchSize).map((msg) =>
+          this.insertHistoricalMessage(channel, msg).catch((err) => this.logger.error('History message insert error', err)),
+        ),
+      );
+    }
+    this.logger.log(`Synced ${items.length} historical message(s) for channel ${channel.id}`);
+  }
+
+  private async insertHistoricalMessage(channel: any, msg: any) {
+    const companyId = channel.company_id;
+    // Business-sent historical messages carry `from` = the channel's own number;
+    // customer-sent ones carry `from` = the customer. Either way the contact we upsert
+    // is the customer's number (`to` for outbound, `from` for inbound).
+    const isOutbound = msg.from && msg.from === channel.phone_number;
+    const phone = isOutbound ? msg.to : msg.from;
+    if (!phone) return;
+
+    const { data: contact } = await this.supabase.getAdminClient()
+      .from('contacts')
+      .upsert(
+        { company_id: companyId, phone, name: phone, last_seen_at: new Date().toISOString() },
+        { onConflict: 'company_id,phone' },
+      )
+      .select()
+      .single();
+    if (!contact) return;
+
+    const { data: existingMsg } = await this.supabase.getAdminClient()
+      .from('messages')
+      .select('id')
+      .eq('wa_message_id', msg.id)
+      .maybeSingle();
+    if (existingMsg) return;
+
+    const { conversation } = await this.findOrCreateConversation(companyId, contact.id, channel.id);
+    const extracted = this.extractContent(msg);
+
+    await this.supabase.getAdminClient()
+      .from('messages')
+      .insert({
+        conversation_id: conversation.id,
+        company_id: companyId,
+        channel_id: channel.id,
+        direction: isOutbound ? 'outbound' : 'inbound',
+        type: extracted.type,
+        content: extracted.content,
+        media_url: extracted.mediaUrl,
+        status: 'delivered',
+        wa_message_id: msg.id,
+        is_note: false,
+        sent_via: isOutbound ? 'business_app' : null,
+        metadata: msg,
+      });
+  }
+
+  /** Contacts Meta syncs in from the customer's phone address book / prior chat history
+   *  on first connecting a coexistence channel. Reuses the same (company_id, phone)
+   *  upsert key as CSV contact import. Payload shape (array under `value.contacts`, each
+   *  with `wa_id` + `profile.name`) is unverified — correct against real payloads once
+   *  observed. */
+  private async processContactsSyncChange(value: any) {
+    const phoneNumberId: string = value.metadata?.phone_number_id;
+    const channel = await this.whatsapp.getChannelByPhoneNumberId(phoneNumberId);
+    if (!channel) {
+      this.logger.warn(`No channel found for phone_number_id: ${phoneNumberId}`);
+      return;
+    }
+    const contacts: any[] = value.contacts || [];
+    if (!contacts.length) return;
+
+    const batchSize = 200;
+    for (let i = 0; i < contacts.length; i += batchSize) {
+      const batch = contacts.slice(i, i + batchSize);
+      const records = batch
+        .map((c) => ({ company_id: channel.company_id, phone: c.wa_id || c.phone, name: c.profile?.name || c.wa_id || c.phone }))
+        .filter((r) => !!r.phone);
+      if (!records.length) continue;
+      const { error } = await this.supabase.getAdminClient()
+        .from('contacts')
+        .upsert(records, { onConflict: 'company_id,phone', ignoreDuplicates: false });
+      if (error) this.logger.error(`Contact sync upsert error: ${error.message}`);
+    }
+    this.logger.log(`Synced ${contacts.length} contact(s) for channel ${channel.id}`);
   }
 
   private async handleIncomingMessage(channel: any, msg: any, waContact: any) {

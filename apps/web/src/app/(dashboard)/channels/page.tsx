@@ -47,7 +47,9 @@ export default function ChannelsPage() {
   const [diagResult, setDiagResult] = useState<any>(null);
   const [diagTestTo, setDiagTestTo] = useState('');
   const [connectingMeta, setConnectingMeta] = useState(false);
+  const [connectingCoexistence, setConnectingCoexistence] = useState(false);
   const signupDataRef = useRef<{ phone_number_id?: string; waba_id?: string }>({});
+  const signupModeRef = useRef<'api_only' | 'coexistence'>('api_only');
 
   // Load the Facebook JS SDK once, for WhatsApp Embedded Signup.
   useEffect(() => {
@@ -79,9 +81,10 @@ export default function ChannelsPage() {
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  const handleConnectMeta = () => {
+  const startEmbeddedSignup = (mode: 'api_only' | 'coexistence') => {
     const appId = process.env.NEXT_PUBLIC_META_APP_ID;
     const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
+    const setConnecting = mode === 'coexistence' ? setConnectingCoexistence : setConnectingMeta;
 
     if (!appId || !configId) {
       toast({
@@ -106,7 +109,8 @@ export default function ChannelsPage() {
     }
 
     signupDataRef.current = {};
-    setConnectingMeta(true);
+    signupModeRef.current = mode;
+    setConnecting(true);
 
     // Facebook's SDK does its own internal typeof check on the login callback and
     // rejects an `async function` outright ("Expression is of type asyncfunction,
@@ -117,37 +121,48 @@ export default function ChannelsPage() {
         if (response.authResponse?.code) {
           finishEmbeddedSignup(response.authResponse.code);
         } else {
-          setConnectingMeta(false);
+          setConnecting(false);
         }
       },
       {
         config_id: configId,
         response_type: 'code',
         override_default_response_type: true,
-        extras: { sessionInfoVersion: '3' },
+        // featureType requests Meta's Coexistence variant of Embedded Signup, which
+        // pairs with the phone's WhatsApp Business App instead of taking exclusive
+        // Cloud API ownership of the number. Exact param name/value unverified against
+        // current Meta docs — confirm before relying on this in production.
+        extras: mode === 'coexistence'
+          ? { sessionInfoVersion: '3', featureType: 'whatsapp_business_app_onboarding' }
+          : { sessionInfoVersion: '3' },
       },
     );
   };
 
+  const handleConnectMeta = () => startEmbeddedSignup('api_only');
+  const handleConnectCoexistence = () => startEmbeddedSignup('coexistence');
+
   const finishEmbeddedSignup = async (code: string) => {
+    const mode = signupModeRef.current;
+    const setConnecting = mode === 'coexistence' ? setConnectingCoexistence : setConnectingMeta;
     // The postMessage FINISH event can arrive slightly before or after the login callback — wait briefly for it.
     for (let i = 0; i < 20 && !signupDataRef.current.phone_number_id; i++) {
       await new Promise((r) => setTimeout(r, 250));
     }
     const { phone_number_id, waba_id } = signupDataRef.current;
     if (!phone_number_id || !waba_id) {
-      setConnectingMeta(false);
+      setConnecting(false);
       toast({ title: 'Signup incomplete', description: 'No phone number was selected. Try again.', variant: 'destructive' });
       return;
     }
     try {
-      const created = await api.post<WhatsAppChannel>('/channels/embedded-signup', { code, phone_number_id, waba_id });
+      const created = await api.post<WhatsAppChannel>('/channels/embedded-signup', { code, phone_number_id, waba_id, connection_mode: mode });
       setChannels((prev) => [created, ...prev]);
       toast({ title: 'WhatsApp connected!', description: created.name });
     } catch (err: any) {
       toast({ title: 'Connection failed', description: err.message, variant: 'destructive' });
     } finally {
-      setConnectingMeta(false);
+      setConnecting(false);
     }
   };
 
@@ -166,7 +181,7 @@ export default function ChannelsPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from('whatsapp_channels')
-        .select('id, name, phone_number, phone_number_id, business_account_id, webhook_verify_token, meta_app_id, is_active, created_at, updated_at')
+        .select('id, name, phone_number, phone_number_id, business_account_id, webhook_verify_token, meta_app_id, connection_mode, is_active, created_at, updated_at')
         .eq('company_id', company.id)
         .order('created_at', { ascending: false });
       if (data) setChannels(data as WhatsAppChannel[]);
@@ -420,6 +435,10 @@ export default function ChannelsPage() {
               {connectingMeta ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Connect WhatsApp
             </Button>
+            <Button size="sm" variant="outline" onClick={handleConnectCoexistence} disabled={connectingCoexistence} title="Keep using the WhatsApp Business App on this number">
+              {connectingCoexistence ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Connect via Coexistence
+            </Button>
             <Button size="sm" variant="outline" onClick={openAdd}><Plus className="w-4 h-4 mr-2" />Add manually</Button>
           </div>
         }
@@ -507,6 +526,9 @@ export default function ChannelsPage() {
                         <Badge variant={channel.is_active ? 'success' : 'secondary'} className="shrink-0">
                           {channel.is_active ? 'Active' : 'Paused'}
                         </Badge>
+                        {channel.connection_mode === 'coexistence' && (
+                          <Badge variant="secondary" className="shrink-0">Coexistence</Badge>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground">{channel.phone_number}</p>
                       <p className="text-xs text-muted-foreground mt-0.5 font-mono truncate">

@@ -6,7 +6,7 @@ import { resolveCompanyId } from '../common/company-cache.util';
 import { EntitlementsService } from '../billing/entitlements.service';
 
 const CHANNEL_SELECT =
-  'id, name, phone_number, phone_number_id, business_account_id, webhook_verify_token, meta_app_id, is_active, created_at, updated_at';
+  'id, name, phone_number, phone_number_id, business_account_id, webhook_verify_token, meta_app_id, connection_mode, is_active, created_at, updated_at';
 
 @Injectable()
 export class WhatsAppService {
@@ -43,12 +43,13 @@ export class WhatsAppService {
    * display info, subscribe our app to the WABA, then create the channel via
    * the same addChannel() path as manual entry — same validation, same encryption.
    */
-  async completeEmbeddedSignup(userId: string, dto: { code: string; phone_number_id: string; waba_id: string }) {
+  async completeEmbeddedSignup(userId: string, dto: { code: string; phone_number_id: string; waba_id: string; connection_mode?: 'api_only' | 'coexistence' }) {
     const appId = process.env.META_APP_ID;
     const appSecret = process.env.META_APP_SECRET;
     if (!appId || !appSecret) {
       throw new BadRequestException('META_APP_ID / META_APP_SECRET not configured on the server.');
     }
+    const connectionMode = dto.connection_mode === 'coexistence' ? 'coexistence' : 'api_only';
 
     // 1. Exchange the auth code for an access token.
     let accessToken: string;
@@ -63,17 +64,22 @@ export class WhatsAppService {
     }
 
     // 2. Register the phone number for Cloud API messaging (required before it can send/receive).
-    try {
-      await axios.post(
-        `${this.baseUrl}/${this.apiVersion}/${dto.phone_number_id}/register`,
-        { messaging_product: 'whatsapp', pin: '000000' },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-    } catch (err: any) {
-      // Already registered is fine (common on reconnect) — anything else, surface it.
-      const msg = err.response?.data?.error?.message || '';
-      if (!/already/i.test(msg)) {
-        throw new BadRequestException(`Failed to register phone number: ${msg || err.message}`);
+    // Skipped for coexistence — this call claims exclusive Cloud API ownership of the number,
+    // which would kick the WhatsApp Business App off it (the entire point of coexistence is
+    // that Meta keeps the number registered to the app while also mirroring to the API).
+    if (connectionMode !== 'coexistence') {
+      try {
+        await axios.post(
+          `${this.baseUrl}/${this.apiVersion}/${dto.phone_number_id}/register`,
+          { messaging_product: 'whatsapp', pin: '000000' },
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+      } catch (err: any) {
+        // Already registered is fine (common on reconnect) — anything else, surface it.
+        const msg = err.response?.data?.error?.message || '';
+        if (!/already/i.test(msg)) {
+          throw new BadRequestException(`Failed to register phone number: ${msg || err.message}`);
+        }
       }
     }
 
@@ -108,6 +114,7 @@ export class WhatsAppService {
       access_token: accessToken,
       meta_app_id: appId,
       app_secret: appSecret,
+      connection_mode: connectionMode,
     });
   }
 
@@ -121,6 +128,7 @@ export class WhatsAppService {
       access_token: string;
       meta_app_id?: string;
       app_secret?: string;
+      connection_mode?: 'api_only' | 'coexistence';
     },
   ) {
     const companyId = await this.getCompanyId(userId);
@@ -159,6 +167,7 @@ export class WhatsAppService {
         webhook_verify_token: verifyToken,
         meta_app_id: dto.meta_app_id || null,
         app_secret: dto.app_secret ? encryptToken(dto.app_secret) : null,
+        connection_mode: dto.connection_mode || 'api_only',
         is_active: true,
       })
       .select(CHANNEL_SELECT)

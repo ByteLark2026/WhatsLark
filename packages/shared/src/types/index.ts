@@ -194,6 +194,7 @@ export interface WhatsAppChannel extends BaseEntity {
   business_account_id: string;
   webhook_verify_token: string;
   meta_app_id?: string;
+  connection_mode: 'api_only' | 'coexistence';
   is_active: boolean;
   // access_token is never sent to frontend
 }
@@ -246,6 +247,7 @@ export interface Message extends BaseEntity {
   is_note: boolean;
   template_id?: string;
   metadata?: Record<string, unknown>;
+  sent_via?: string; // 'business_app' when mirrored from a WhatsApp Coexistence channel
 }
 
 // ----- Lead -----

@@ -250,6 +250,11 @@ export function ChatWindow({ conversation, onStatusChange, onBack }: Props) {
                     <span className="text-xs font-medium">Internal note</span>
                   </div>
                 )}
+                {msg.sent_via === 'business_app' && (
+                  <div className={cn('text-[10px] font-medium mb-1', isOut ? 'text-white/70' : 'text-muted-foreground')}>
+                    Sent via WhatsApp Business App
+                  </div>
+                )}
                 {msg.media_url && msg.type === 'image' ? (
                   <a href={`/api/media?id=${encodeURIComponent(msg.media_url)}&channel_id=${encodeURIComponent(conversation.channel_id)}`} target="_blank" rel="noopener noreferrer">
                     <img src={`/api/media?id=${encodeURIComponent(msg.media_url)}&channel_id=${encodeURIComponent(conversation.channel_id)}`}
