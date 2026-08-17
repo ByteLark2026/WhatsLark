@@ -178,6 +178,20 @@ export class CampaignProcessor {
               })),
             });
           }
+        } else if (format === 'IMAGE' || format === 'VIDEO' || format === 'DOCUMENT') {
+          // A media header always requires a matching media parameter on every send —
+          // omitting it entirely (as this used to) is exactly what Meta's 132012
+          // "Parameter format does not match" error means. Use the campaign's configured
+          // header media if set, else fall back to the same sample URL the template was
+          // submitted for review with (stored on comp.text at creation time).
+          const link = templateVariables['header_media'] || comp.text;
+          if (link) {
+            const key = format.toLowerCase();
+            result.push({
+              type: 'header',
+              parameters: [{ type: key, [key]: { link } }],
+            });
+          }
         }
       }
 
