@@ -142,8 +142,18 @@ export default function TemplatesPage() {
     closeEdit();
     setSaving(false);
 
-    const submitted = await submitToMeta(updated.id);
-    if (submitted) setTemplates((prev) => prev.map((t) => t.id === submitted.id ? submitted : t));
+    // Only auto-submit if this template was never actually sent to Meta — editing one
+    // that already has a wa_template_id would try to CREATE a second template with the
+    // same name, which Meta rejects outright ("already English content for this
+    // template"). Editing an already-submitted template needs Meta's separate
+    // edit-in-place API, not the create endpoint this route calls; use "Submit for
+    // review" manually only once you've resolved the naming conflict on Meta's side.
+    if (!editTarget.wa_template_id) {
+      const submitted = await submitToMeta(updated.id);
+      if (submitted) setTemplates((prev) => prev.map((t) => t.id === submitted.id ? submitted : t));
+    } else {
+      toast({ title: 'Saved locally', description: 'This template was already submitted to Meta — use "Submit for review" if you need to resend it.' });
+    }
   };
 
   // "Duplicate for another channel" — same name and content are fine across channels

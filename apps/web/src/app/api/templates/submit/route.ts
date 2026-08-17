@@ -183,9 +183,26 @@ export async function POST(req: NextRequest) {
         components,
       }),
     });
-    const json = await res.json();
+    let json = await res.json();
 
-    if (!res.ok) {
+    // Meta template names must be unique per WABA+language. If a template with this
+    // name already exists there (from an earlier attempt this DB row lost track of, or
+    // one created directly in Meta Business Manager), self-heal by looking it up and
+    // adopting its real id/status instead of failing outright — that's a more useful
+    // outcome for the user than "already exists, go rename it."
+    if (!res.ok && /already.*(content|exist)/i.test(json.error?.message || json.error?.error_user_msg || '')) {
+      const lookupRes = await fetch(
+        `https://graph.facebook.com/${GRAPH_VERSION}/${channel.business_account_id}/message_templates?name=${encodeURIComponent(template.name)}`,
+        { headers: { Authorization: `Bearer ${channel.access_token}` } },
+      );
+      const lookupJson = await lookupRes.json();
+      const existing = (lookupJson.data || []).find((t: any) => t.language === template.language);
+      if (existing) {
+        json = existing;
+      } else {
+        return NextResponse.json({ message: json.error?.error_user_msg || json.error?.message || 'Meta rejected the template' }, { status: 400 });
+      }
+    } else if (!res.ok) {
       return NextResponse.json({ message: json.error?.error_user_msg || json.error?.message || 'Meta rejected the template' }, { status: 400 });
     }
 
