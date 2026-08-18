@@ -101,7 +101,7 @@ export default async function HomePage() {
       <nav className="border-b sticky top-0 bg-white/95 backdrop-blur z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/logo.svg" alt="WhatsLark" className="h-9 w-auto object-contain" />
+            <img src="/logo.png" alt="WhatsLark" className="h-9 w-auto object-contain" />
             <span className="text-xl font-bold">WhatsLark</span>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
@@ -216,7 +216,7 @@ export default async function HomePage() {
       <footer className="border-t py-8 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <img src="/logo.svg" alt="WhatsLark" className="h-7 w-auto object-contain" />
+            <img src="/logo.png" alt="WhatsLark" className="h-7 w-auto object-contain" />
             <span className="font-semibold text-foreground">WhatsLark</span>
             <span>· WhatsApp CRM for Sales, Support &amp; Automation</span>
           </div>

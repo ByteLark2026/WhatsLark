@@ -131,7 +131,7 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
     <aside className={cn('flex flex-col w-64 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border', className)}>
       {/* Logo */}
       <div className="flex items-center gap-2 px-6 py-5 border-b border-sidebar-border min-w-0">
-        <img src="/logo.svg" alt="WhatsLark" className="h-12 w-auto object-contain flex-shrink-0" />
+        <img src="/logo.png" alt="WhatsLark" className="h-12 w-auto object-contain flex-shrink-0" />
         {company && <p className="text-xs text-white truncate min-w-0 flex-1">{company.name}</p>}
       </div>
 
