@@ -45,7 +45,7 @@ async function bootstrap() {
   // Swagger docs (disable in production)
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
-      .setTitle('WhatsLark API')
+      .setTitle('LarkFlow API')
       .setDescription('WhatsApp CRM for Sales, Support & Automation')
       .setVersion('1.0')
       .addBearerAuth()
@@ -56,7 +56,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || process.env.API_PORT || 3001;
   await app.listen(port);
-  console.log(`WhatsLark API running on http://localhost:${port}`);
+  console.log(`LarkFlow API running on http://localhost:${port}`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
 }
 

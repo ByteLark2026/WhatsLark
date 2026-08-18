@@ -4,6 +4,6 @@
   "outputDirectory": "apps/web/.next",
   "installCommand": "npm install",
   "env": {
-    "NEXT_PUBLIC_APP_NAME": "WhatsLark"
+    "NEXT_PUBLIC_APP_NAME": "LarkFlow"
   }
 }

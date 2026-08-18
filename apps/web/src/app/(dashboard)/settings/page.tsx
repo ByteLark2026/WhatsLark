@@ -250,7 +250,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex gap-3 items-start">
                   <span className="w-5 h-5 rounded-full bg-green-600 text-white flex items-center justify-center shrink-0 font-bold text-[11px]">4</span>
-                  <p>Click <strong>Connect number</strong> below and paste your credentials. Done — WhatsLark will send messages on your behalf.</p>
+                  <p>Click <strong>Connect number</strong> below and paste your credentials. Done — LarkFlow will send messages on your behalf.</p>
                 </div>
               </CardContent>
             </Card>
@@ -289,7 +289,7 @@ export default function SettingsPage() {
               <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
                 <div>
                   <CardTitle className="flex items-center gap-2"><MessageSquare className="w-4 h-4" />Connected Numbers</CardTitle>
-                  <CardDescription className="text-xs mt-0.5">WhatsApp Business numbers linked to WhatsLark</CardDescription>
+                  <CardDescription className="text-xs mt-0.5">WhatsApp Business numbers linked to LarkFlow</CardDescription>
                 </div>
                 <Button size="sm" onClick={() => setShowAdd(true)} className="w-full sm:w-auto">
                   <Plus className="w-4 h-4 mr-1.5" />Connect number

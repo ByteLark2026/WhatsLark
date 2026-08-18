@@ -90,7 +90,7 @@ export default function PricingPage() {
     <div className="min-h-screen bg-white">
       <div className="max-w-6xl mx-auto px-6 py-16">
         <div className="text-center mb-10">
-          <Link href="/" className="text-green-600 font-bold text-xl tracking-tight">WhatsLark</Link>
+          <Link href="/" className="text-green-600 font-bold text-xl tracking-tight">LarkFlow</Link>
           <h1 className="text-3xl sm:text-4xl font-bold mt-6 mb-3">Simple, transparent pricing</h1>
           <p className="text-gray-500">Prices in INR. Meta/WhatsApp messaging charges are billed separately by Meta.</p>
 

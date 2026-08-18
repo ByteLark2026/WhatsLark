@@ -44,7 +44,7 @@ export default function BillingPaymentsPage() {
 
   return (
     <div>
-      <Header title="Payment history" subtitle="All charges for your WhatsLark subscription" />
+      <Header title="Payment history" subtitle="All charges for your LarkFlow subscription" />
       <div className="p-4 sm:p-6 max-w-3xl space-y-4">
         <Link href="/settings/billing" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-4 h-4" />Back to billing

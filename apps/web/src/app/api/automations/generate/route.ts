@@ -17,7 +17,7 @@ async function requireAuth(req: NextRequest): Promise<boolean> {
   return !error && !!data.user;
 }
 
-const SYSTEM_PROMPT = `You are an automation flow builder for WhatsLark, a WhatsApp CRM platform.
+const SYSTEM_PROMPT = `You are an automation flow builder for LarkFlow, a WhatsApp CRM platform.
 Help users create automation flows by understanding their requirements in plain language.
 
 When you have enough information to build a complete flow, output the flow as a JSON code block.

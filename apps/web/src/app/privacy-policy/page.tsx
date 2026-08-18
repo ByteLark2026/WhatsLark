@@ -1,8 +1,8 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Privacy Policy — WhatsLark',
-  description: 'Privacy Policy for WhatsLark WhatsApp CRM platform.',
+  title: 'Privacy Policy — LarkFlow',
+  description: 'Privacy Policy for LarkFlow WhatsApp CRM platform.',
 };
 
 export default function PrivacyPolicyPage() {
@@ -11,7 +11,7 @@ export default function PrivacyPolicyPage() {
       <div className="max-w-3xl mx-auto px-6 py-16">
         {/* Header */}
         <div className="mb-10">
-          <Link href="/" className="text-green-600 font-bold text-xl tracking-tight">WhatsLark</Link>
+          <Link href="/" className="text-green-600 font-bold text-xl tracking-tight">LarkFlow</Link>
           <h1 className="text-3xl font-bold mt-6 mb-2">Privacy Policy</h1>
           <p className="text-gray-500 text-sm">Last updated: June 9, 2026</p>
         </div>
@@ -20,19 +20,19 @@ export default function PrivacyPolicyPage() {
 
           <section>
             <p>
-              WhatsLark ("we", "our", or "us") operates a WhatsApp Business CRM platform accessible at{' '}
+              LarkFlow ("we", "our", or "us") operates a WhatsApp Business CRM platform accessible at{' '}
               <strong>larkflow.io</strong>. This Privacy Policy explains how we collect, use, store,
               and protect information when you use our platform.
             </p>
             <p className="mt-3">
-              By using WhatsLark, you agree to the collection and use of information in accordance with this policy.
+              By using LarkFlow, you agree to the collection and use of information in accordance with this policy.
             </p>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">1. Information We Collect</h2>
             <h3 className="font-medium text-gray-800 mb-2">1.1 Account Information</h3>
-            <p>When you register for WhatsLark, we collect:</p>
+            <p>When you register for LarkFlow, we collect:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li>Full name and email address</li>
               <li>Company name and business details</li>
@@ -73,7 +73,7 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-3">2. How We Use Your Information</h2>
             <p>We use the information we collect to:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
-              <li>Provide, operate, and improve the WhatsLark platform</li>
+              <li>Provide, operate, and improve the LarkFlow platform</li>
               <li>Send and receive WhatsApp messages on your behalf using your Meta API credentials</li>
               <li>Process and store your contacts, conversations, and campaigns</li>
               <li>Authenticate your account and maintain security</li>
@@ -90,7 +90,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">3. WhatsApp and Meta Platform Data</h2>
             <p>
-              WhatsLark integrates with the WhatsApp Business Platform via the Meta Cloud API. When you connect
+              LarkFlow integrates with the WhatsApp Business Platform via the Meta Cloud API. When you connect
               your WhatsApp Business number:
             </p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -161,7 +161,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">8. Cookies</h2>
             <p>
-              WhatsLark uses essential cookies and local storage for authentication and session management.
+              LarkFlow uses essential cookies and local storage for authentication and session management.
               We do not use advertising or tracking cookies. You can disable cookies in your browser settings,
               but this may affect your ability to log in.
             </p>
@@ -170,7 +170,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">9. Children's Privacy</h2>
             <p>
-              WhatsLark is a business platform not intended for children under 13. We do not knowingly collect
+              LarkFlow is a business platform not intended for children under 13. We do not knowingly collect
               personal information from children. If you believe a child has provided us with personal data,
               contact us immediately.
             </p>
@@ -180,7 +180,7 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-3">10. Changes to This Policy</h2>
             <p>
               We may update this Privacy Policy from time to time. We will notify you of significant changes
-              by email or by posting a notice on the platform. Continued use of WhatsLark after changes
+              by email or by posting a notice on the platform. Continued use of LarkFlow after changes
               constitutes acceptance of the updated policy.
             </p>
           </section>
@@ -189,7 +189,7 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-3">11. Contact Us</h2>
             <p>If you have questions about this Privacy Policy or our data practices, contact us:</p>
             <div className="mt-3 p-4 bg-gray-50 rounded-lg">
-              <p className="font-medium text-gray-900">WhatsLark / ByteLark</p>
+              <p className="font-medium text-gray-900">LarkFlow / ByteLark</p>
               <p className="mt-1">Email: <a href="mailto:hello@bytelark.net" className="text-green-600 underline">hello@bytelark.net</a></p>
               <p>Website: <a href="https://larkflow.io" className="text-green-600 underline">larkflow.io</a></p>
             </div>
@@ -198,8 +198,8 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <div className="mt-12 pt-8 border-t text-xs text-gray-400 flex justify-between">
-          <span>© 2026 WhatsLark. All rights reserved.</span>
-          <Link href="/" className="text-green-600 hover:underline">Back to WhatsLark</Link>
+          <span>© 2026 LarkFlow. All rights reserved.</span>
+          <Link href="/" className="text-green-600 hover:underline">Back to LarkFlow</Link>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-# WhatsLark — WhatsApp CRM for Sales, Support & Automation
+# LarkFlow — WhatsApp CRM for Sales, Support & Automation
 
 Multi-tenant WhatsApp CRM SaaS. Built with Next.js 15 + NestJS + Supabase.
 

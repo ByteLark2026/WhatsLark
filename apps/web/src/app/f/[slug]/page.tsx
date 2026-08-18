@@ -206,7 +206,7 @@ export default function PublicFormPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-4">Powered by WhatsLark</p>
+        <p className="text-center text-xs text-muted-foreground mt-4">Powered by LarkFlow</p>
       </div>
     </div>
   );

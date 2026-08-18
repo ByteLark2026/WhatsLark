@@ -6,8 +6,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#0E1420] via-[#1a2a40] to-[#0E1420] flex-col justify-between p-12">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="WhatsLark" className="h-12 w-auto object-contain" />
-          <span className="text-2xl font-bold text-white">WhatsLark</span>
+          <img src="/logo.png" alt="LarkFlow" className="h-12 w-auto object-contain" />
+          <span className="text-2xl font-bold text-white">LarkFlow</span>
         </div>
         <div>
           <blockquote className="text-2xl font-semibold text-white leading-relaxed mb-4">

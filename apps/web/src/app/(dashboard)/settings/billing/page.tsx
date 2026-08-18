@@ -126,7 +126,7 @@ export default function BillingSettingsPage() {
 
   return (
     <div>
-      <Header title="Billing" subtitle="Manage your WhatsLark subscription plan and payment history" />
+      <Header title="Billing" subtitle="Manage your LarkFlow subscription plan and payment history" />
       <div className="p-4 sm:p-6 max-w-3xl space-y-4">
 
         {loading ? (

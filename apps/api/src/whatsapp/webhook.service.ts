@@ -203,7 +203,7 @@ export class WhatsAppWebhookService {
 
   /** A message the customer sent themselves from the WhatsApp Business App, mirrored to
    *  us so it shows up in the same conversation instead of going unseen. Recorded as
-   *  outbound (the business sent it, just not through WhatsLark) and tagged sent_via so
+   *  outbound (the business sent it, just not through LarkFlow) and tagged sent_via so
    *  the inbox can label it. Which field holds the echoed messages, and which of
    *  from/to is the customer vs. the business number in that shape, is unverified —
    *  correct against real payloads once observed. */

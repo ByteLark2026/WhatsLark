@@ -1,6 +1,6 @@
 # Razorpay Billing — Setup & Operations Guide
 
-WhatsLark's subscription billing (starter / professional / business, monthly
+LarkFlow's subscription billing (starter / professional / business, monthly
 or yearly, billed in INR) is handled by Razorpay Subscriptions. This doc
 covers everything needed to configure, test, and operate it.
 

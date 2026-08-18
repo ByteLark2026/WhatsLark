@@ -76,7 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
               <MessageSquare className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-lg leading-none">WhatsLark</span>
+            <span className="font-bold text-lg leading-none">LarkFlow</span>
           </div>
         </header>
 

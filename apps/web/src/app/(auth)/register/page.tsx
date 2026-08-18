@@ -54,7 +54,7 @@ export default function RegisterPage() {
         setAuth(profile, companyUser.companies, UserRole.OWNER, data.session!.access_token);
       }
 
-      toast({ title: 'Workspace created!', description: 'Welcome to WhatsLark.' });
+      toast({ title: 'Workspace created!', description: 'Welcome to LarkFlow.' });
       router.push('/dashboard');
     } catch (err: any) {
       toast({ title: 'Registration failed', description: err.message, variant: 'destructive' });
@@ -71,8 +71,8 @@ export default function RegisterPage() {
   return (
     <div className="w-full max-w-md">
       <div className="flex items-center gap-2 mb-8 lg:hidden">
-        <img src="/logo.png" alt="WhatsLark" className="h-10 w-auto object-contain" />
-        <span className="text-xl font-bold">WhatsLark</span>
+        <img src="/logo.png" alt="LarkFlow" className="h-10 w-auto object-contain" />
+        <span className="text-xl font-bold">LarkFlow</span>
       </div>
 
       <Card>

@@ -205,7 +205,7 @@ export async function GET(req: NextRequest) {
             messaging_product: 'whatsapp',
             to: toNormalized,
             type: 'text',
-            text: { body: '✅ WhatsLark diagnostic test message', preview_url: false },
+            text: { body: '✅ LarkFlow diagnostic test message', preview_url: false },
           }),
         },
       );

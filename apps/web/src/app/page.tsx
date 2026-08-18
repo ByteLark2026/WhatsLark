@@ -101,8 +101,8 @@ export default async function HomePage() {
       <nav className="border-b sticky top-0 bg-white/95 backdrop-blur z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="WhatsLark" className="h-9 w-auto object-contain" />
-            <span className="text-xl font-bold">WhatsLark</span>
+            <img src="/logo.png" alt="LarkFlow" className="h-9 w-auto object-contain" />
+            <span className="text-xl font-bold">LarkFlow</span>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
@@ -205,7 +205,7 @@ export default async function HomePage() {
         <div className="max-w-3xl mx-auto text-center">
           <Globe className="w-12 h-12 text-primary mx-auto mb-6" />
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">Ready to supercharge your WhatsApp?</h2>
-          <p className="text-lg text-white/70 mb-8">Join thousands of businesses using WhatsLark to close more deals on WhatsApp.</p>
+          <p className="text-lg text-white/70 mb-8">Join thousands of businesses using LarkFlow to close more deals on WhatsApp.</p>
           <Link href="/register">
             <Button size="lg" className="px-10">Get started free <ArrowRight className="w-4 h-4 ml-2" /></Button>
           </Link>
@@ -216,8 +216,8 @@ export default async function HomePage() {
       <footer className="border-t py-8 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="WhatsLark" className="h-7 w-auto object-contain" />
-            <span className="font-semibold text-foreground">WhatsLark</span>
+            <img src="/logo.png" alt="LarkFlow" className="h-7 w-auto object-contain" />
+            <span className="font-semibold text-foreground">LarkFlow</span>
             <span>· WhatsApp CRM for Sales, Support &amp; Automation</span>
           </div>
           <div className="flex gap-4">

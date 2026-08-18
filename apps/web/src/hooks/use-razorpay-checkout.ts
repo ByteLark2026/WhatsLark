@@ -45,7 +45,7 @@ export function useRazorpayCheckout(onVerified?: () => void) {
       const rzp = new Razorpay({
         key: created.razorpay_key_id,
         subscription_id: created.razorpay_subscription_id,
-        name: 'WhatsLark',
+        name: 'LarkFlow',
         description: `${created.plan.name} subscription`,
         theme: { color: '#16a34a' },
         prefill: {

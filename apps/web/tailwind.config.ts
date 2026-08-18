@@ -43,7 +43,7 @@ const config: Config = {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
-        // WhatsLark brand palette — WhatsApp-inspired green + professional blue
+        // LarkFlow brand palette — WhatsApp-inspired green + professional blue
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',

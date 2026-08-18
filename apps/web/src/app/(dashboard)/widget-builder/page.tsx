@@ -147,7 +147,7 @@ function WidgetPreview({ config }: { config: WidgetConfig }) {
             </div>
           )}
 
-          <p className="text-xs text-gray-400 text-center">Powered by WhatsLark</p>
+          <p className="text-xs text-gray-400 text-center">Powered by LarkFlow</p>
         </div>
       </div>
     </div>
@@ -191,7 +191,7 @@ export default function WidgetBuilderPage() {
 
   const widgetOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
-  const installCode = `<!-- WhatsLark Chat Widget -->
+  const installCode = `<!-- LarkFlow Chat Widget -->
 <script>
   window.whatsLarkConfig = {
     siteId: "${company?.id || 'YOUR_COMPANY_ID'}",

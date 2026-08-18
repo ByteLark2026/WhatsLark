@@ -8,7 +8,7 @@ export async function GET() {
   const script = `(function () {
   var cfg = window.whatsLarkConfig || {};
   var siteId = cfg.siteId;
-  if (!siteId) { console.error('[WhatsLark] siteId missing from whatsLarkConfig'); return; }
+  if (!siteId) { console.error('[LarkFlow] siteId missing from whatsLarkConfig'); return; }
 
   var API = ${JSON.stringify(apiUrl)};
   var primaryColor = cfg.primaryColor || '#25D366';
